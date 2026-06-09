@@ -1,0 +1,35 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563EB;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accent-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <title>CampusOryx Logo</title>
+  <path
+    d="M400 160C370 100 300 64 240 64C134 64 48 150 48 256C48 362 134 448 240 448C310 448 380 400 410 330"
+    fill="none"
+    stroke="url(#brand-gradient)"
+    stroke-width="56"
+    stroke-linecap="round"
+  />
+  <path
+    d="M240 160C187 160 144 203 144 256C144 309 187 352 240 352C280 352 320 325 336 288"
+    fill="none"
+    stroke="url(#accent-gradient)"
+    stroke-width="48"
+    stroke-linecap="round"
+  />
+  <circle cx="400" cy="160" r="32" fill="#FBBF24" />
+  <path
+    d="M400 160L440 80"
+    fill="none"
+    stroke="#4F46E5"
+    stroke-width="24"
+    stroke-linecap="round"
+  />
+</svg>

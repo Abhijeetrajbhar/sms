@@ -1,0 +1,868 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  EXCUSED
+}
+
+enum SubmissionStatus {
+  PENDING
+  SUBMITTED
+  LATE
+  GRADED
+  MISSING
+}
+
+enum TeacherAssignmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ResultEntryStatus {
+  DRAFT
+  SUBMITTED
+  LOCKED
+}
+
+enum FeeStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum FeeStructureStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FeeCycle {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+  CUSTOM
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum WebhookProcessStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum OfflinePaymentStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  PROCESSED
+  REJECTED
+  FAILED
+}
+
+enum NotificationType {
+  ASSIGNMENT_CREATED
+  ASSIGNMENT_GRADED
+  RESULT_PUBLISHED
+  ATTENDANCE_WARNING
+  FEE_DUE
+  ANNOUNCEMENT
+  GENERAL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Grade {
+  A_PLUS
+  A
+  B_PLUS
+  B
+  C
+  D
+  F
+}
+
+enum AnnouncementTarget {
+  ALL
+  STUDENTS
+  TEACHERS
+  PARENTS
+  CLASS
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_RESTORED
+  ROLE_CHANGED
+  ATTENDANCE_MARKED
+  ATTENDANCE_UPDATED
+  ASSIGNMENT_CREATED
+  ASSIGNMENT_UPDATED
+  ASSIGNMENT_DELETED
+  SUBMISSION_GRADED
+  RESULT_PUBLISHED
+  MARKS_DRAFT_SAVED
+  MARKS_SUBMITTED
+  MARKS_UNLOCKED
+  FEE_UPDATED
+  FEE_STRUCTURE_CREATED
+  FEE_STRUCTURE_UPDATED
+  FEE_INVOICE_CREATED
+  FEE_INVOICE_UPDATED
+  PAYMENT_ORDER_CREATED
+  PAYMENT_VERIFIED
+  PAYMENT_FAILED
+  RECEIPT_ISSUED
+  OFFLINE_PAYMENT_CREATED
+  OFFLINE_PAYMENT_APPROVED
+  OFFLINE_PAYMENT_REJECTED
+  REFUND_REQUESTED
+  REFUND_APPROVED
+  REFUND_PROCESSED
+  FILE_UPLOADED
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  email           String     @unique
+  password        String
+  role            Role
+  status          UserStatus @default(PENDING_VERIFICATION)
+  firstName       String
+  lastName        String
+  phone           String?
+  avatarUrl       String?
+  avatarPublicId  String?
+  permissions     String[]   @default([])
+  isSuperAdmin    Boolean    @default(false)
+  lastLoginAt     DateTime?
+  isEmailVerified Boolean    @default(false)
+  emailVerifyToken String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  sessions        Session[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]    @relation("AuditActor")
+  studentProfile  StudentProfile?
+  teacherProfile  TeacherProfile?
+  parentProfile   ParentProfile?
+  announcements   Announcement[]
+  fileAssets      FileAsset[]
+
+  @@index([role])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  refreshToken String   @unique
+  deviceInfo   String?
+  ipAddress    String?
+  userAgent    String?
+  isValid      Boolean  @default(true)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model StudentProfile {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @unique @db.ObjectId
+  studentCode     String   @unique
+  dateOfBirth     DateTime?
+  gender          Gender?
+  address         String?
+  bloodGroup      String?
+  admissionDate   DateTime @default(now())
+  classId         String?  @db.ObjectId
+  parentIds       String[] @db.ObjectId
+  riskLevel       RiskLevel @default(LOW)
+  riskScore       Float    @default(0)
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+  class           Class?   @relation(fields: [classId], references: [id])
+  attendances     Attendance[]
+  submissions     AssignmentSubmission[]
+  results         Result[]
+  reportCards     ReportCard[]
+  fees            Fee[]
+
+  @@index([classId])
+  @@index([parentIds])
+  @@map("student_profiles")
+}
+
+model TeacherProfile {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @unique @db.ObjectId
+  employeeCode    String   @unique
+  qualification   String?
+  specialization  String?
+  experience      Int?
+  dateOfJoining   DateTime @default(now())
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+  classes         Class[]  @relation("ClassTeacher")
+  subjectTeachers SubjectTeacher[]
+  attendances     Attendance[] @relation("MarkedByTeacher")
+  assignments     Assignment[]
+  timetableSlots  TimetableSlot[]
+
+  @@map("teacher_profiles")
+}
+
+model ParentProfile {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @unique @db.ObjectId
+  occupation      String?
+  relation        String?
+  emergencyContact String?
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("parent_profiles")
+}
+
+model Class {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  section         String
+  gradeLevel      String
+  academicYear    String
+  teacherId       String?  @db.ObjectId
+  capacity        Int      @default(40)
+  room            String?
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  teacher         TeacherProfile? @relation("ClassTeacher", fields: [teacherId], references: [id])
+  students        StudentProfile[]
+  subjects        SubjectTeacher[]
+  attendances     Attendance[]
+  assignments     Assignment[]
+  results         Result[]
+  reportCards     ReportCard[]
+  timetableSlots  TimetableSlot[]
+  fees            Fee[]
+  announcements   Announcement[]
+
+  @@unique([name, section, academicYear])
+  @@index([teacherId])
+  @@index([academicYear])
+  @@map("classes")
+}
+
+model Subject {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  code            String   @unique
+  description     String?
+  credits         Int      @default(1)
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subjectTeachers SubjectTeacher[]
+  attendances     Attendance[]
+  assignments     Assignment[]
+  results         Result[]
+  timetableSlots  TimetableSlot[]
+
+  @@map("subjects")
+}
+
+model SubjectTeacher {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  classId    String   @db.ObjectId
+  subjectId  String   @db.ObjectId
+  teacherId  String   @db.ObjectId
+  status     TeacherAssignmentStatus @default(ACTIVE)
+  assignedBy String?  @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  class      Class          @relation(fields: [classId], references: [id])
+  subject    Subject        @relation(fields: [subjectId], references: [id])
+  teacher    TeacherProfile @relation(fields: [teacherId], references: [id])
+
+  @@unique([classId, subjectId])
+  @@index([teacherId])
+  @@map("subject_teachers")
+}
+
+model Attendance {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  studentId       String           @db.ObjectId
+  classId         String           @db.ObjectId
+  subjectId       String?          @db.ObjectId
+  markedById      String           @db.ObjectId
+  date            DateTime
+  status          AttendanceStatus
+  remarks         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  student         StudentProfile   @relation(fields: [studentId], references: [id])
+  class           Class            @relation(fields: [classId], references: [id])
+  subject         Subject?         @relation(fields: [subjectId], references: [id])
+  markedBy        TeacherProfile   @relation("MarkedByTeacher", fields: [markedById], references: [id])
+
+  @@unique([studentId, classId, date])
+  @@index([studentId])
+  @@index([classId])
+  @@index([date])
+  @@index([status])
+  @@map("attendances")
+}
+
+model Assignment {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  description     String
+  classId         String   @db.ObjectId
+  subjectId       String   @db.ObjectId
+  teacherId       String   @db.ObjectId
+  dueDate         DateTime
+  maxMarks        Int      @default(100)
+  attachmentUrl   String?
+  attachmentPublicId String?
+  isPublished     Boolean  @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  class           Class          @relation(fields: [classId], references: [id])
+  subject         Subject        @relation(fields: [subjectId], references: [id])
+  teacher         TeacherProfile @relation(fields: [teacherId], references: [id])
+  submissions     AssignmentSubmission[]
+
+  @@index([classId])
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([dueDate])
+  @@map("assignments")
+}
+
+model AssignmentSubmission {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  assignmentId    String           @db.ObjectId
+  studentId       String           @db.ObjectId
+  submittedAt     DateTime?
+  fileUrl         String?
+  filePublicId    String?
+  content         String?
+  marks           Int?
+  grade           Grade?
+  feedback        String?
+  status          SubmissionStatus @default(PENDING)
+  isLate          Boolean          @default(false)
+  gradedAt        DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  assignment      Assignment       @relation(fields: [assignmentId], references: [id])
+  student         StudentProfile   @relation(fields: [studentId], references: [id])
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId])
+  @@index([studentId])
+  @@index([status])
+  @@map("assignment_submissions")
+}
+
+model Result {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  studentId       String   @db.ObjectId
+  classId         String   @db.ObjectId
+  subjectId       String   @db.ObjectId
+  examType        String
+  academicYear    String
+  term            String
+  marksObtained   Float
+  maxMarks        Float    @default(100)
+  percentage      Float
+  grade           Grade
+  gpa             Float
+  isPublished     Boolean  @default(false)
+  status          ResultEntryStatus @default(DRAFT)
+  enteredById     String?  @db.ObjectId
+  submittedAt     DateTime?
+  lockedAt        DateTime?
+  lockedById      String?  @db.ObjectId
+  publishedAt     DateTime?
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+  class           Class          @relation(fields: [classId], references: [id])
+  subject         Subject        @relation(fields: [subjectId], references: [id])
+
+  @@unique([studentId, subjectId, examType, term, academicYear])
+  @@index([studentId])
+  @@index([classId])
+  @@index([subjectId])
+  @@index([isPublished])
+  @@map("results")
+}
+
+model ReportCard {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  studentId       String   @db.ObjectId
+  classId         String   @db.ObjectId
+  academicYear    String
+  term            String
+  totalMarks      Float
+  maxMarks        Float
+  percentage      Float
+  gpa             Float
+  overallGrade    Grade
+  attendancePercentage Float
+  teacherRemarks  String?
+  principalRemarks String?
+  pdfUrl          String?
+  pdfPublicId     String?
+  isGenerated     Boolean  @default(false)
+  generatedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+  class           Class          @relation(fields: [classId], references: [id])
+
+  @@unique([studentId, academicYear, term])
+  @@index([studentId])
+  @@index([classId])
+  @@map("report_cards")
+}
+
+model Notification {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String           @db.ObjectId
+  type            NotificationType
+  title           String
+  message         String
+  isRead          Boolean          @default(false)
+  readAt          DateTime?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model Announcement {
+  id              String             @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  content         String
+  authorId        String             @db.ObjectId
+  target          AnnouncementTarget @default(ALL)
+  classId         String?            @db.ObjectId
+  attachmentUrl   String?
+  isActive        Boolean            @default(true)
+  readByIds       String[]           @db.ObjectId
+  expiresAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  author          User               @relation(fields: [authorId], references: [id])
+  class           Class?             @relation(fields: [classId], references: [id])
+
+  @@index([authorId])
+  @@index([target])
+  @@index([classId])
+  @@map("announcements")
+}
+
+model Timetable {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  classId         String   @db.ObjectId
+  academicYear    String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  slots           TimetableSlot[]
+
+  @@unique([classId, academicYear])
+  @@index([classId])
+  @@map("timetables")
+}
+
+model TimetableSlot {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  timetableId     String   @db.ObjectId
+  classId         String   @db.ObjectId
+  subjectId       String   @db.ObjectId
+  teacherId       String   @db.ObjectId
+  dayOfWeek       Int      // 0=Mon, 6=Sun
+  startTime       String   // "09:00"
+  endTime         String   // "10:00"
+  room            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  timetable       Timetable      @relation(fields: [timetableId], references: [id])
+  class           Class          @relation(fields: [classId], references: [id])
+  subject         Subject        @relation(fields: [subjectId], references: [id])
+  teacher         TeacherProfile @relation(fields: [teacherId], references: [id])
+
+  @@index([timetableId])
+  @@index([teacherId])
+  @@index([classId])
+  @@map("timetable_slots")
+}
+
+model Fee {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  studentId       String    @db.ObjectId
+  classId         String    @db.ObjectId
+  title           String
+  description     String?
+  amount          Float
+  paidAmount      Float     @default(0)
+  dueDate         DateTime
+  status          FeeStatus @default(PENDING)
+  academicYear    String
+  term            String
+  waiverReason    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+  class           Class          @relation(fields: [classId], references: [id])
+  payments        Payment[]
+
+  @@index([studentId])
+  @@index([classId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("fees")
+}
+
+model Payment {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  feeId           String   @db.ObjectId
+  amount          Float
+  paymentMethod   String
+  transactionId   String?
+  receiptUrl      String?
+  remarks         String?
+  paidAt          DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  fee             Fee      @relation(fields: [feeId], references: [id])
+
+  @@index([feeId])
+  @@map("payments")
+}
+
+model FeeStructure {
+  id              String             @id @default(auto()) @map("_id") @db.ObjectId
+  academicYear    String
+  classId         String             @db.ObjectId
+  section         String?
+  feeType         String
+  feeItems        Json
+  cycle           FeeCycle           @default(YEARLY)
+  dueDate         DateTime
+  lateFeeRule     Json?
+  discountRules   Json?
+  status          FeeStructureStatus @default(ACTIVE)
+  activeKey       String             @unique
+  createdBy       String             @db.ObjectId
+  updatedBy       String             @db.ObjectId
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([academicYear])
+  @@index([classId])
+  @@index([status])
+  @@map("fee_structures")
+}
+
+model FeeInvoice {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceNumber   String        @unique
+  sourceKey       String        @unique
+  structureId     String?       @db.ObjectId
+  studentId       String        @db.ObjectId
+  classId         String        @db.ObjectId
+  section         String?
+  academicYear    String
+  feeItems        Json
+  subtotalAmount  Float
+  discountAmount  Float         @default(0)
+  lateFeeAmount   Float         @default(0)
+  payableAmount   Float
+  paidAmount      Float         @default(0)
+  refundedAmount  Float         @default(0)
+  dueAmount       Float
+  status          InvoiceStatus @default(UNPAID)
+  dueDate         DateTime
+  generatedBy     String        @db.ObjectId
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([structureId])
+  @@index([classId])
+  @@index([academicYear])
+  @@index([status])
+  @@index([dueDate])
+  @@map("fee_invoices")
+}
+
+model PaymentAttempt {
+  id                    String               @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceId             String               @db.ObjectId
+  studentId             String               @db.ObjectId
+  userId                String               @db.ObjectId
+  gateway               String               @default("RAZORPAY")
+  gatewayOrderId        String?              @unique
+  gatewayPaymentId      String?              @unique
+  gatewaySignatureHash  String?
+  idempotencyKey        String               @unique
+  activeInvoiceKey      String               @unique
+  amount                Float
+  currency              String               @default("INR")
+  status                PaymentAttemptStatus @default(CREATED)
+  failureReason         String?
+  metadata              Json?
+  verifiedAt            DateTime?
+  expiresAt             DateTime
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([invoiceId])
+  @@index([studentId])
+  @@index([userId])
+  @@index([status])
+  @@map("payment_attempts")
+}
+
+model PaymentWebhookEvent {
+  id                String               @id @default(auto()) @map("_id") @db.ObjectId
+  gateway           String               @default("RAZORPAY")
+  eventId           String               @unique
+  eventType         String
+  rawPayloadHash    String
+  processedStatus   WebhookProcessStatus @default(RECEIVED)
+  processedAt       DateTime?
+  errorMessage      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([eventType])
+  @@index([processedStatus])
+  @@map("payment_webhook_events")
+}
+
+model Receipt {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  receiptNumber     String   @unique
+  sourceKey         String   @unique
+  invoiceId         String   @db.ObjectId
+  paymentAttemptId  String?  @db.ObjectId
+  offlinePaymentId  String?  @db.ObjectId
+  studentId         String   @db.ObjectId
+  amount            Float
+  paymentMode       String
+  gatewayPaymentId  String?
+  transactionReference String?
+  issuedAt          DateTime @default(now())
+  issuedBy          String   @db.ObjectId
+  receiptUrl        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([studentId])
+  @@map("fee_receipts")
+}
+
+model OfflinePayment {
+  id                String               @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceId         String               @db.ObjectId
+  studentId         String               @db.ObjectId
+  amount            Float
+  mode              String
+  referenceNumber   String?
+  proofFile         String?
+  status            OfflinePaymentStatus @default(PENDING_VERIFICATION)
+  addedBy           String               @db.ObjectId
+  verifiedBy        String?              @db.ObjectId
+  rejectionReason   String?
+  verifiedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([invoiceId])
+  @@index([studentId])
+  @@index([status])
+  @@map("offline_payments")
+}
+
+model Refund {
+  id                String       @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceId         String       @db.ObjectId
+  paymentAttemptId  String?      @db.ObjectId
+  amount            Float
+  reason            String
+  status            RefundStatus @default(REQUESTED)
+  requestedBy       String       @db.ObjectId
+  approvedBy        String?      @db.ObjectId
+  processedBy       String?      @db.ObjectId
+  gatewayRefundId   String?      @unique
+  approvedAt        DateTime?
+  processedAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("fee_refunds")
+}
+
+model AuditLog {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  actorId     String      @db.ObjectId
+  action      AuditAction
+  entity      String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  actor       User        @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model FileAsset {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  uploadedById String  @db.ObjectId
+  url         String
+  publicId    String
+  fileName    String
+  fileType    String
+  fileSize    Int
+  folder      String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  uploadedBy  User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([uploadedById])
+  @@map("file_assets")
+}
