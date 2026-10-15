@@ -57,8 +57,8 @@ export const authenticate = async (
       throw AppError.unauthorized('User not found');
     }
 
-    if (user.status === 'INACTIVE' || user.status === 'SUSPENDED') {
-      throw AppError.forbidden('Account is inactive or suspended');
+    if (user.status !== 'ACTIVE') {
+      throw AppError.forbidden('Account is not active');
     }
 
     req.user = {

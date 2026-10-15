@@ -1,11 +1,51 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { mockData } from '../data/mockData.js';
 import { api, authApi, getAccessToken, setAccessToken } from '../services/api.js';
 import { hasPermission } from '../utils/permissions.js';
 
 const AppContext = createContext(null);
 const USER_KEY = 'sms-user';
 const THEME_KEY = 'sms-theme';
+const DATA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+let sessionRestoreRequest = null;
+const dataLoadRequests = new Map();
+
+function createEmptyAppData() {
+  return {
+    adminStats: {
+      totalStudents: 0,
+      totalTeachers: 0,
+      totalParents: 0,
+      totalClasses: 0,
+      attendanceRate: 0,
+      feeCollectionRate: 0,
+      activeAssignments: 0,
+      atRiskStudents: 0,
+    },
+    students: [],
+    teachers: [],
+    classes: [],
+    attendance: { today: [], monthly: {} },
+    assignments: [],
+    results: [],
+    fees: [],
+    timetable: {},
+    announcements: [],
+    analyticsData: {
+      enrollment: [],
+      attendance: [],
+      feeCollection: [],
+      labels: [],
+    },
+    generatedInsights: [],
+    notifications: [],
+    roleNotifications: [],
+    auditLogs: [],
+    dashboardAnalytics: null,
+    teacherDashboard: null,
+    parentDashboard: null,
+    studentDashboard: null,
+  };
+}
 
 function normalizeUser(user) {
   if (!user) return null;
@@ -64,6 +104,7 @@ function mapStudent(student) {
 function mapFee(fee) {
   return {
     id: fee.id,
+    source: 'legacy',
     student: fullName(fee.student?.user),
     studentId: fee.studentId,
     className: fee.class ? `${fee.class.name}${fee.class.section ? ` ${fee.class.section}` : ''}` : 'Unassigned',
@@ -74,6 +115,29 @@ function mapFee(fee) {
     status: String(fee.status || 'pending').toLowerCase(),
     dueDate: String(fee.dueDate || '').slice(0, 10),
     paidDate: fee.payments?.[0]?.paidAt ? String(fee.payments[0].paidAt).slice(0, 10) : null,
+  };
+}
+
+function mapInvoiceFee(invoice, student) {
+  const feeItems = Array.isArray(invoice.feeItems) ? invoice.feeItems : [];
+  const title = feeItems.map((item) => item?.name).filter(Boolean).join(', ') || invoice.invoiceNumber || 'Fee invoice';
+  const className = student?.class
+    ? `${student.class.name}${student.class.section ? ` ${student.class.section}` : ''}`
+    : 'Unassigned';
+
+  return {
+    id: invoice.id,
+    source: 'invoice',
+    student: student?.user ? fullName(student.user) : 'Student',
+    studentId: invoice.studentId,
+    className,
+    term: title,
+    title,
+    amount: Number(invoice.payableAmount || 0),
+    paid: Number(invoice.paidAmount || 0),
+    status: String(invoice.status || 'UNPAID').toLowerCase(),
+    dueDate: String(invoice.dueDate || '').slice(0, 10),
+    paidDate: invoice.status === 'PAID' ? String(invoice.updatedAt || invoice.createdAt || '').slice(0, 10) : null,
   };
 }
 
@@ -106,6 +170,7 @@ function mapClass(item) {
     students,
     subjects: item._count?.subjects || 0,
     room: item.room || 'Room TBD',
+    academicYear: item.academicYear,
     health: Math.round(Math.min(100, Math.max(55, (students / capacity) * 100))),
     isClassTeacher: Boolean(item.isClassTeacher),
   };
@@ -254,13 +319,14 @@ function mapParentTimetable(slots = []) {
   }, {});
 }
 
-async function loadBackendData(role, selectedChildId, currentUser) {
+async function fetchBackendData(role, selectedChildId, currentUser, bypassCache = false) {
   const nextData = {};
   const requests = [];
+  const reqOptions = bypassCache ? { bypassCache: true } : {};
 
   if (role === 'TEACHER') {
     requests.push(
-      api.get('/teachers/me/dashboard').then((response) => {
+      api.get('/teachers/me/dashboard', reqOptions).then((response) => {
         const dashboard = response.data;
         if (!dashboard) return;
         nextData.teacherDashboard = dashboard;
@@ -282,37 +348,50 @@ async function loadBackendData(role, selectedChildId, currentUser) {
       })
     );
     requests.push(
-      api.get('/assignments?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.assignments = response.data.map(mapAssignment);
+      api.get('/assignments?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.assignments = rows.map(mapAssignment);
       })
     );
     requests.push(
-      api.get('/timetable/my-schedule').then((response) => {
-        if (Array.isArray(response.data)) nextData.timetable = mapTeacherTimetable(response.data);
+      api.get('/timetable/my-schedule', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.timetable = mapTeacherTimetable(rows);
       })
     );
     requests.push(
-      api.get('/results/teacher/marks/history?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.results = response.data.map(mapTeacherResult);
+      api.get('/results/teacher/marks/history?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.results = rows.map(mapTeacherResult);
       })
     );
     requests.push(
-      api.get('/notifications?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.roleNotifications = response.data.map(mapNotification);
+      api.get('/notifications?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.roleNotifications = rows.map(mapNotification);
       })
     );
   }
 
   if (role === 'ADMIN') {
+    requests.push(
+      api.get('/notifications?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.roleNotifications = rows.map(mapNotification);
+      })
+    );
+
     if (hasPermission(currentUser, 'students:view')) requests.push(
-      api.get('/students?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.students = response.data.map(mapStudent);
+      api.get('/students?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.students = rows.map(mapStudent);
       })
     );
 
     if (hasPermission(currentUser, 'teachers:view')) requests.push(
-      api.get('/teachers?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.teachers = response.data.map(mapTeacher);
+      api.get('/teachers?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.teachers = rows.map(mapTeacher);
       })
     );
   }
@@ -320,7 +399,7 @@ async function loadBackendData(role, selectedChildId, currentUser) {
   if (role === 'PARENT') {
     const query = selectedChildId ? `?studentId=${encodeURIComponent(selectedChildId)}` : '';
     requests.push(
-      api.get(`/parents/me/dashboard${query}`).then((response) => {
+      api.get(`/parents/me/dashboard${query}`, reqOptions).then((response) => {
         const dashboard = response.data;
         if (!dashboard) return;
         nextData.parentDashboard = dashboard;
@@ -332,7 +411,9 @@ async function loadBackendData(role, selectedChildId, currentUser) {
             : [],
           monthly: dashboard.attendance?.summary || {},
         };
-        nextData.fees = Array.isArray(dashboard.fees?.legacy) ? dashboard.fees.legacy.map(mapFee) : [];
+        nextData.fees = Array.isArray(dashboard.fees?.invoices) && dashboard.fees.invoices.length
+          ? dashboard.fees.invoices.map((invoice) => mapInvoiceFee(invoice, dashboard.selectedChild))
+          : Array.isArray(dashboard.fees?.legacy) ? dashboard.fees.legacy.map(mapFee) : [];
         nextData.assignments = Array.isArray(dashboard.assignments)
           ? dashboard.assignments.map((assignment) => mapAssignment({
             ...assignment,
@@ -352,7 +433,7 @@ async function loadBackendData(role, selectedChildId, currentUser) {
 
   if (role === 'STUDENT') {
     requests.push(
-      api.get('/students/me/dashboard').then((response) => {
+      api.get('/students/me/dashboard', reqOptions).then((response) => {
         const dashboard = response.data;
         if (!dashboard) return;
         const profile = dashboard.profile;
@@ -367,7 +448,9 @@ async function loadBackendData(role, selectedChildId, currentUser) {
             : [],
           monthly: dashboard.attendance?.summary || {},
         };
-        nextData.fees = Array.isArray(dashboard.fees?.legacy) ? dashboard.fees.legacy.map(mapFee) : [];
+        nextData.fees = Array.isArray(dashboard.fees?.invoices) && dashboard.fees.invoices.length
+          ? dashboard.fees.invoices.map((invoice) => mapInvoiceFee(invoice, profile))
+          : Array.isArray(dashboard.fees?.legacy) ? dashboard.fees.legacy.map(mapFee) : [];
         nextData.assignments = Array.isArray(dashboard.assignments)
           ? dashboard.assignments.map((assignment) => mapAssignment({
             ...assignment,
@@ -387,34 +470,42 @@ async function loadBackendData(role, selectedChildId, currentUser) {
 
   if (role === 'ADMIN') {
     if (hasPermission(currentUser, 'dashboard:view')) requests.push(
-      api.get('/analytics/dashboard').then((response) => {
+      api.get('/analytics/dashboard', reqOptions).then((response) => {
         if (response.data) nextData.dashboardAnalytics = response.data;
       })
     );
 
     if (hasPermission(currentUser, 'classes:manage')) requests.push(
-      api.get('/classes?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.classes = response.data.map(mapClass);
+      api.get('/classes?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.classes = rows.map(mapClass);
       })
     );
 
     if (hasPermission(currentUser, 'notices:manage')) requests.push(
-      api.get('/announcements?limit=100').then((response) => {
+      api.get('/announcements?limit=100', reqOptions).then((response) => {
         const rows = response.data?.data || response.data;
         if (Array.isArray(rows)) nextData.announcements = rows.map(mapAnnouncement);
       })
     );
 
     if (hasPermission(currentUser, 'fees:view')) requests.push(
-      api.get('/fees?limit=100').then((response) => {
-        const rows = response.data?.data || response.data;
-        if (Array.isArray(rows)) nextData.fees = rows.map(mapFee);
+      Promise.all([
+        api.get('/fees/invoices?limit=100', reqOptions).catch(() => ({ data: [] })),
+        api.get('/fees?limit=100', reqOptions).catch(() => ({ data: [] })),
+      ]).then(([invoicesRes, feesRes]) => {
+        const invoiceRows = invoicesRes.data?.data || invoicesRes.data || [];
+        const legacyRows = feesRes.data?.data || feesRes.data || [];
+        const mappedInvoices = Array.isArray(invoiceRows) ? invoiceRows.map((inv) => mapInvoiceFee(inv, inv.student)) : [];
+        const mappedLegacy = Array.isArray(legacyRows) ? legacyRows.map(mapFee) : [];
+        nextData.fees = mappedInvoices.length > 0 ? mappedInvoices : mappedLegacy;
       })
     );
 
     if (hasPermission(currentUser, 'audit:view')) requests.push(
-      api.get('/audit-logs?limit=100').then((response) => {
-        if (Array.isArray(response.data)) nextData.auditLogs = response.data.map(mapAuditLog);
+      api.get('/audit-logs?limit=100', reqOptions).then((response) => {
+        const rows = response.data?.data || response.data;
+        if (Array.isArray(rows)) nextData.auditLogs = rows.map(mapAuditLog);
       })
     );
   }
@@ -426,17 +517,42 @@ async function loadBackendData(role, selectedChildId, currentUser) {
   };
 }
 
+function loadBackendData(role, selectedChildId, currentUser, bypassCache = false) {
+  const key = `${currentUser?.id || 'anonymous'}:${role}:${selectedChildId || ''}`;
+  const existing = dataLoadRequests.get(key);
+  if (existing && !bypassCache) return existing;
+
+  const request = fetchBackendData(role, selectedChildId, currentUser, bypassCache).finally(() => {
+    if (dataLoadRequests.get(key) === request) dataLoadRequests.delete(key);
+  });
+  dataLoadRequests.set(key, request);
+  return request;
+}
+
+function restoreBackendSession() {
+  if (sessionRestoreRequest) return sessionRestoreRequest;
+
+  sessionRestoreRequest = (async () => {
+    if (!getAccessToken()) await authApi.refresh();
+    return authApi.me();
+  })().finally(() => {
+    sessionRestoreRequest = null;
+  });
+
+  return sessionRestoreRequest;
+}
+
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(readStoredUser);
   const [selectedChildId, setSelectedChildId] = useState('');
-  const [appData, setAppData] = useState(mockData);
+  const [appData, setAppData] = useState(createEmptyAppData);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
-  const [isAuthLoading, setIsAuthLoading] = useState(() => Boolean(getAccessToken()));
+  const [isAuthLoading, setIsAuthLoading] = useState(() => Boolean(readStoredUser()));
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [dataError, setDataError] = useState('');
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [authError, setAuthError] = useState('');
-  const [notifications, setNotifications] = useState(mockData.notifications);
+  const [notifications, setNotifications] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const currentRole = currentUser?.role || null;
@@ -461,6 +577,9 @@ export function AppProvider({ children }) {
     setAccessToken(null);
     setDataError('');
     setSelectedChildId('');
+    setNotifications([]);
+    setAppData(createEmptyAppData());
+    api.invalidate();
     localStorage.removeItem(USER_KEY);
   }, []);
 
@@ -477,16 +596,16 @@ export function AppProvider({ children }) {
     let active = true;
 
     async function restoreSession() {
-      if (!getAccessToken()) {
+      if (!getAccessToken() && !readStoredUser()) {
         setIsAuthLoading(false);
         return;
       }
 
       try {
-        const response = await authApi.me();
+        const response = await restoreBackendSession();
         if (active) storeSession(response.data);
       } catch {
-        if (active) clearSession();
+        if (active && !getAccessToken()) clearSession();
       } finally {
         if (active) setIsAuthLoading(false);
       }
@@ -502,39 +621,41 @@ export function AppProvider({ children }) {
     let active = true;
     let refreshTimer;
 
-    async function hydrateData() {
+    async function hydrateData({ showLoading = true, bypassCache = false } = {}) {
+      if (isAuthLoading) return;
+
       if (!currentRole || !getAccessToken()) {
-        setAppData(mockData);
+        setAppData(createEmptyAppData());
         return;
       }
 
-      setIsDataLoading(true);
-      const result = await loadBackendData(currentRole, selectedChildId, currentUser);
+      // Check if we already have non-empty data in memory
+      setAppData((existing) => {
+        const hasExisting = Boolean(
+          existing.dashboardAnalytics ||
+          existing.teacherDashboard ||
+          existing.studentDashboard ||
+          existing.parentDashboard ||
+          existing.students?.length > 0
+        );
+        if (showLoading && !hasExisting) {
+          setIsDataLoading(true);
+        }
+        return existing;
+      });
+
+      const result = await loadBackendData(currentRole, selectedChildId, currentUser, bypassCache);
 
       if (active) {
-        setAppData((existing) => ['ADMIN', 'TEACHER', 'PARENT', 'STUDENT'].includes(currentRole)
-          ? {
-            ...existing,
-            ...(currentRole === 'ADMIN' ? { dashboardAnalytics: null, auditLogs: [] } : {}),
-            ...(currentRole === 'PARENT' ? { parentDashboard: null } : {}),
-            ...(currentRole === 'STUDENT' ? { studentDashboard: null } : {}),
-            students: [],
-            teachers: [],
-            classes: [],
-            fees: [],
-            results: [],
-            assignments: [],
-            attendance: { today: [], monthly: {} },
-            timetable: {},
-            announcements: [],
-            ...result.data,
-          }
-          : { ...existing, ...result.data });
+        setAppData((existing) => ({
+          ...existing,
+          ...result.data,
+        }));
         if (currentRole === 'PARENT' && !selectedChildId && result.data.parentDashboard?.selectedChild?.id) {
           setSelectedChildId(result.data.parentDashboard.selectedChild.id);
         }
-        if (['TEACHER', 'PARENT', 'STUDENT'].includes(currentRole)) {
-          setNotifications(result.data.roleNotifications || []);
+        if (result.data.roleNotifications) {
+          setNotifications(result.data.roleNotifications);
         }
         setDataError(result.failedRequests
           ? `Some live school data could not be loaded (${result.failedRequests} request${result.failedRequests === 1 ? '' : 's'} failed).`
@@ -543,15 +664,42 @@ export function AppProvider({ children }) {
       }
     }
 
-    hydrateData();
+    hydrateData({ bypassCache: dataRefreshKey > 0 });
     if (currentRole && getAccessToken()) {
-      refreshTimer = window.setInterval(hydrateData, 30000);
+      refreshTimer = window.setInterval(() => hydrateData({ showLoading: false }), DATA_REFRESH_INTERVAL_MS);
     }
     return () => {
       active = false;
       if (refreshTimer) window.clearInterval(refreshTimer);
     };
-  }, [currentRole, currentUser, selectedChildId, dataRefreshKey]);
+  }, [currentRole, currentUser, selectedChildId, dataRefreshKey, isAuthLoading]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !getAccessToken()) return undefined;
+
+    let active = true;
+    let disconnect = null;
+
+    import('../services/socket.js').then(({ connectNotificationSocket }) => {
+      if (!active || !getAccessToken()) return;
+      disconnect = connectNotificationSocket({
+        onNotification: (item) => {
+          const notification = mapNotification(item);
+          setNotifications((existing) => {
+            if (existing.some((entry) => entry.id === notification.id)) return existing;
+            return [notification, ...existing].slice(0, 100);
+          });
+        },
+      });
+    }).catch(() => {
+      // Notification sockets are progressive enhancement; polling/live data still works without them.
+    });
+
+    return () => {
+      active = false;
+      if (disconnect) disconnect();
+    };
+  }, [currentUser?.id]);
 
   const login = useCallback(
     async ({ email, password }) => {
@@ -580,8 +728,10 @@ export function AppProvider({ children }) {
 
       try {
         const response = await authApi.register(payload);
-        storeSession(response.data?.user, response.data?.accessToken);
-        return response.data?.user;
+        if (response.data?.accessToken) {
+          storeSession(response.data?.user, response.data?.accessToken);
+        }
+        return { ...(response.data || {}), message: response.message };
       } catch (error) {
         const message = error.message || 'Registration failed. Check the details and try again.';
         setAuthError(message);
@@ -603,106 +753,44 @@ export function AppProvider({ children }) {
     }
   }, [clearSession]);
 
-  const markAllNotificationsRead = () => {
+  const markAllNotificationsRead = useCallback(() => {
+    const previous = notifications;
     setNotifications((items) => items.map((item) => ({ ...item, read: true })));
-    api.patch('/notifications/read-all').catch(() => undefined);
-  };
+    api.patch('/notifications/read-all').catch(() => setNotifications(previous));
+  }, [notifications]);
 
-  const markNotificationRead = (id) => {
+  const markNotificationRead = useCallback((id) => {
+    const previous = notifications;
     setNotifications((items) => items.map((item) => (item.id === id ? { ...item, read: true } : item)));
-    api.patch(`/notifications/${id}/read`).catch(() => undefined);
-  };
+    api.patch(`/notifications/${id}/read`).catch(() => setNotifications(previous));
+  }, [notifications]);
 
   const toggleTheme = () => setTheme((value) => (value === 'dark' ? 'light' : 'dark'));
 
   const selectChild = useCallback((childId) => {
     setSelectedChildId(childId);
-    setAppData((existing) => ({
-      ...existing,
-      parentDashboard: null,
-      fees: [],
-      results: [],
-      assignments: [],
-      attendance: { today: [], monthly: {} },
-      timetable: {},
-      announcements: [],
-    }));
+    api.invalidate('/parents/me/dashboard');
+  }, []);
+
+  const retryData = useCallback(() => {
+    api.invalidate();
+    setDataRefreshKey((value) => value + 1);
   }, []);
 
   const updateData = useCallback((updater) => {
     setAppData((existing) => (typeof updater === 'function' ? updater(existing) : { ...existing, ...updater }));
   }, []);
 
-  const addStudent = useCallback((student) => {
-    const next = {
-      id: student.id || `S${Date.now().toString().slice(-5)}`,
-      attendance: Number(student.attendance || 100),
-      grade: student.grade || 'N/A',
-      risk: student.risk || 'low',
-      fees: student.fees || 'pending',
-      ...student,
-    };
-    updateData((data) => ({ ...data, students: [next, ...data.students] }));
-  }, [updateData]);
-
-  const removeStudent = useCallback((id) => {
-    updateData((data) => ({ ...data, students: data.students.filter((item) => item.id !== id) }));
-  }, [updateData]);
-
-  const addTeacher = useCallback((teacher) => {
-    const next = {
-      id: teacher.id || `T${Date.now().toString().slice(-5)}`,
-      status: 'active',
-      workload: Number(teacher.workload || 50),
-      classes: String(teacher.classes || '').split(',').map((item) => item.trim()).filter(Boolean),
-      ...teacher,
-    };
-    updateData((data) => ({ ...data, teachers: [next, ...data.teachers] }));
-  }, [updateData]);
-
-  const removeTeacher = useCallback((id) => {
-    updateData((data) => ({ ...data, teachers: data.teachers.filter((item) => item.id !== id) }));
-  }, [updateData]);
-
-  const addClass = useCallback((classItem) => {
-    const next = {
-      id: classItem.id || `C${Date.now().toString().slice(-5)}`,
-      students: Number(classItem.students || 0),
-      subjects: Number(classItem.subjects || 0),
-      health: Number(classItem.health || 85),
-      ...classItem,
-    };
-    updateData((data) => ({ ...data, classes: [next, ...data.classes] }));
-    api.post('/classes', {
-      name: next.name,
-      section: next.section,
-      gradeLevel: String(next.name).replace(/[^0-9]/g, '') || next.name,
-      academicYear: '2025-2026',
-      capacity: Math.max(40, Number(next.students || 0)),
-      room: next.room,
-    }).catch(() => undefined);
-  }, [updateData]);
-
-  const removeClass = useCallback((id) => {
-    updateData((data) => ({ ...data, classes: data.classes.filter((item) => item.id !== id) }));
-    api.delete(`/classes/${id}`).catch(() => undefined);
-  }, [updateData]);
-
-  const addAssignment = useCallback((assignment) => {
-    const next = {
-      id: assignment.id || `A${Date.now().toString().slice(-5)}`,
-      submitted: Number(assignment.submitted || 0),
-      total: Number(assignment.total || 1),
-      status: assignment.status || 'active',
-      ...assignment,
-    };
-    updateData((data) => ({ ...data, assignments: [next, ...data.assignments] }));
-  }, [updateData]);
-
-  const removeAssignment = useCallback((id) => {
+  const removeAssignment = useCallback(async (id) => {
+    const removed = appData.assignments.find((item) => item.id === id);
     updateData((data) => ({ ...data, assignments: data.assignments.filter((item) => item.id !== id) }));
-    api.delete(`/assignments/${id}`).catch(() => undefined);
-  }, [updateData]);
+    try {
+      await api.delete(`/assignments/${id}`);
+    } catch (error) {
+      if (removed) updateData((data) => ({ ...data, assignments: [removed, ...data.assignments] }));
+      throw error;
+    }
+  }, [appData.assignments, updateData]);
 
   const recordFeePayment = useCallback(async ({ feeId, amount, paymentMethod, transactionId, remarks }) => {
     const numericAmount = Number(amount);
@@ -725,48 +813,6 @@ export function AppProvider({ children }) {
       throw error;
     }
   }, [appData.fees, updateData]);
-
-  const addPeriod = useCallback(async (period) => {
-    const next = { id: period.id || `P${Date.now()}`, ...period };
-    updateData((data) => ({
-      ...data,
-      timetable: { ...data.timetable, [period.day]: [...(data.timetable[period.day] || []), next].sort((a, b) => a.time.localeCompare(b.time)) },
-    }));
-
-    if (period.timetableId && period.classId && period.subjectId && period.teacherId) {
-      try {
-        const response = await api.post(`/timetable/${period.timetableId}/slots`, {
-          classId: period.classId,
-          subjectId: period.subjectId,
-          teacherId: period.teacherId,
-          dayOfWeek: period.dayOfWeek,
-          startTime: period.startTime,
-          endTime: period.endTime,
-          room: period.room,
-        });
-        const backendId = response.data?.id;
-        if (backendId) updateData((data) => ({
-          ...data,
-          timetable: { ...data.timetable, [period.day]: data.timetable[period.day].map((item) => item.id === next.id ? { ...item, id: backendId, timetableId: period.timetableId } : item) },
-        }));
-      } catch (error) {
-        updateData((data) => ({ ...data, timetable: { ...data.timetable, [period.day]: data.timetable[period.day].filter((item) => item.id !== next.id) } }));
-        throw error;
-      }
-    }
-  }, [updateData]);
-
-  const removePeriod = useCallback(async (day, period) => {
-    updateData((data) => ({ ...data, timetable: { ...data.timetable, [day]: data.timetable[day].filter((item) => item !== period && item.id !== period.id) } }));
-    if (period.timetableId && period.id && !String(period.id).startsWith('P')) {
-      try {
-        await api.delete(`/timetable/${period.timetableId}/slots/${period.id}`);
-      } catch (error) {
-        updateData((data) => ({ ...data, timetable: { ...data.timetable, [day]: [...data.timetable[day], period].sort((a, b) => a.time.localeCompare(b.time)) } }));
-        throw error;
-      }
-    }
-  }, [updateData]);
 
   const generateAIInsights = useCallback(async () => {
     const candidates = appData.students.filter((student) => student.risk !== 'low' || student.attendance < 85);
@@ -837,7 +883,7 @@ export function AppProvider({ children }) {
     }
   }, [appData.classes, currentUser?.name, updateData]);
 
-  const publishResults = useCallback(() => {
+  const publishResults = useCallback(async (payload) => {
     const notification = {
       id: `N${Date.now()}`,
       type: 'result',
@@ -846,14 +892,10 @@ export function AppProvider({ children }) {
       time: 'Just now',
       read: false,
     };
+    await api.post('/results/publish', payload);
     setNotifications((items) => [notification, ...items]);
-    api.post('/results/publish', {
-      classId: appData.classes[0]?.id,
-      examType: 'Mid-Term',
-      term: 'Term 2',
-      academicYear: '2025-2026',
-    }).catch(() => undefined);
-  }, [appData.classes]);
+    setDataRefreshKey((value) => value + 1);
+  }, []);
 
   const searchRecords = useCallback((query) => {
     const term = query.trim().toLowerCase();
@@ -880,7 +922,7 @@ export function AppProvider({ children }) {
       isAuthLoading,
       isDataLoading,
       dataError,
-      retryData: () => setDataRefreshKey((value) => value + 1),
+      retryData,
       authError,
       theme,
       data: appData,
@@ -894,26 +936,13 @@ export function AppProvider({ children }) {
       markAllNotificationsRead,
       markNotificationRead,
       searchRecords,
-      addStudent,
-      removeStudent,
-      addTeacher,
-      removeTeacher,
-      addClass,
-      removeClass,
-      addAssignment,
       removeAssignment,
       recordFeePayment,
-      addPeriod,
-      removePeriod,
       generateAIInsights,
       addAnnouncement,
       publishResults,
     }),
     [
-      addAssignment,
-      addClass,
-      addStudent,
-      addTeacher,
       appData,
       authError,
       currentRole,
@@ -925,18 +954,16 @@ export function AppProvider({ children }) {
       dataError,
       login,
       register,
+      retryData,
       logout,
       notifications,
+      markAllNotificationsRead,
+      markNotificationRead,
       publishResults,
       removeAssignment,
       recordFeePayment,
-      addPeriod,
-      removePeriod,
       generateAIInsights,
       addAnnouncement,
-      removeClass,
-      removeStudent,
-      removeTeacher,
       searchRecords,
       sidebarOpen,
       theme,

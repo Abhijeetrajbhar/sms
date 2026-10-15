@@ -1,5 +1,7 @@
-import multer from 'multer';
+import { Readable } from 'node:stream';
 import { Request } from 'express';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
 import { AppError } from '../utils/AppError';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -14,7 +16,6 @@ const ALLOWED_DOC_TYPES = [
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_DOC_SIZE = 10 * 1024 * 1024; // 10MB
 
-// Memory storage — hand off to Cloudinary from controller
 const storage = multer.memoryStorage();
 
 function createFileFilter(allowedTypes: string[]) {
@@ -22,12 +23,7 @@ function createFileFilter(allowedTypes: string[]) {
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(
-        new AppError(
-          `Invalid file type. Allowed: ${allowedTypes.join(', ')}`,
-          400
-        )
-      );
+      cb(new AppError(`Invalid file type. Allowed: ${allowedTypes.join(', ')}`, 400));
     }
   };
 }
@@ -44,21 +40,13 @@ export const uploadAssignment = multer({
   fileFilter: createFileFilter([...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES]),
 }).single('attachment');
 
-export const uploadSubmission = multer({
-  storage,
-  limits: { fileSize: MAX_DOC_SIZE },
-  fileFilter: createFileFilter([...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES]),
-}).single('file');
-
 export const uploadGeneral = multer({
   storage,
   limits: { fileSize: MAX_DOC_SIZE },
   fileFilter: createFileFilter([...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES]),
 }).single('file');
 
-// Cloudinary upload helper
-import { v2 as cloudinary } from 'cloudinary';
-import streamifier from 'streamifier';
+export const uploadSubmission = uploadGeneral;
 
 export async function uploadToCloudinary(
   buffer: Buffer,
@@ -79,6 +67,6 @@ export async function uploadToCloudinary(
         }
       }
     );
-    streamifier.createReadStream(buffer).pipe(uploadStream);
+    Readable.from(buffer).pipe(uploadStream);
   });
 }

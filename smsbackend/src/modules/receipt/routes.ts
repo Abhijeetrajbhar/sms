@@ -8,6 +8,7 @@ import { requireAdminPermissionWhenAdmin } from '../../middlewares/adminPermissi
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN, Role.STUDENT, Role.PARENT));
 
+router.get('/', requireAdminPermissionWhenAdmin('fees:view'), controller.listReceipts);
 router.get('/:receiptId', requireAdminPermissionWhenAdmin('fees:view'), controller.getReceipt);
 router.get('/:receiptId/download', requireAdminPermissionWhenAdmin('receipts:download'), controller.downloadReceipt);
 

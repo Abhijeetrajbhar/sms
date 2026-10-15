@@ -1,5 +1,6 @@
 // service.ts
 import prisma from '../../config/database';
+import crypto from 'crypto';
 import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/apiResponse';
 import { getPaginationOptions } from '../../utils/pagination';
@@ -7,6 +8,10 @@ import { Request } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { getAttendanceSummary } from '../../utils/attendance';
 import { getTeacherScope } from './access';
+import { AuditAction, Role, UserStatus } from '@prisma/client';
+import { auditLog } from '../auditLog/service';
+import { hashPassword, generateRandomToken, hashToken } from '../../utils/password';
+import { sendAccountInvitationEmail, buildAccountActivationUrl } from '../../utils/email';
 
 export class TeacherService {
   async createProfile(data: {
@@ -17,14 +22,16 @@ export class TeacherService {
     dateOfJoining?: string;
   }) {
     const user = await prisma.user.findUnique({ where: { id: data.userId } });
-    if (!user) throw AppError.notFound('User not found');
+    if (!user || user.deletedAt) throw AppError.notFound('User not found');
     if (user.role !== 'TEACHER') throw AppError.badRequest('User is not a teacher');
+    if (user.status === 'INACTIVE' || user.status === 'SUSPENDED') {
+      throw AppError.unprocessable('Teacher profile requires an active or pending teacher account');
+    }
 
     const existing = await prisma.teacherProfile.findUnique({ where: { userId: data.userId } });
     if (existing) throw AppError.conflict('Teacher profile already exists');
 
-    const count = await prisma.teacherProfile.count();
-    const employeeCode = `EMP${String(count + 1).padStart(5, '0')}`;
+    const employeeCode = `EMP${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 
     return prisma.teacherProfile.create({
       data: {
@@ -37,6 +44,108 @@ export class TeacherService {
       },
       include: { user: { select: { firstName: true, lastName: true, email: true } } },
     });
+  }
+
+  async onboardTeacher(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    qualification?: string;
+    specialization?: string;
+    experience?: number;
+    dateOfJoining?: string;
+    credentialDelivery?: 'EMAIL_INVITE' | 'TEMP_PASSWORD';
+    temporaryPassword?: string;
+  }, actorId: string, req?: Request) {
+    if (!data.firstName?.trim() || !data.lastName?.trim() || !data.email?.trim()) {
+      throw AppError.badRequest('First name, last name, and email are required');
+    }
+
+    const email = data.email.toLowerCase().trim();
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw AppError.conflict('Email already registered');
+
+    const isTempPassword = data.credentialDelivery === 'TEMP_PASSWORD';
+    let rawPassword = '';
+    let invitationToken: string | null = null;
+    let invitationExpires: Date | null = null;
+
+    if (isTempPassword) {
+      rawPassword = data.temporaryPassword?.trim() || `Faculty#${Math.floor(1000 + Math.random() * 9000)}`;
+    } else {
+      rawPassword = generateRandomToken();
+      invitationToken = generateRandomToken();
+      invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    }
+
+    const hashedPassword = await hashPassword(rawPassword);
+    const employeeCode = `EMP${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+
+    const { user, profile } = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          phone: data.phone?.trim() || undefined,
+          role: Role.TEACHER,
+          status: isTempPassword ? UserStatus.ACTIVE : UserStatus.PENDING_VERIFICATION,
+          isEmailVerified: isTempPassword,
+          emailVerifyToken: invitationToken ? hashToken(invitationToken) : null,
+          emailVerifyExpires: invitationExpires,
+          passwordResetToken: isTempPassword ? 'MUST_CHANGE_PASSWORD' : null,
+        },
+      });
+
+      const newProfile = await tx.teacherProfile.create({
+        data: {
+          userId: newUser.id,
+          employeeCode,
+          qualification: data.qualification?.trim() || undefined,
+          specialization: data.specialization?.trim() || undefined,
+          experience: data.experience !== undefined && data.experience !== null ? Number(data.experience) : undefined,
+          dateOfJoining: data.dateOfJoining ? new Date(data.dateOfJoining) : new Date(),
+        },
+      });
+
+      return { user: newUser, profile: newProfile };
+    });
+
+    await auditLog({
+      actorId,
+      action: AuditAction.USER_CREATED,
+      entity: 'TeacherOnboarding',
+      entityId: profile.id,
+      metadata: { email, employeeCode, credentialDelivery: data.credentialDelivery || 'EMAIL_INVITE' },
+      ipAddress: req?.ip,
+      userAgent: req?.headers['user-agent'],
+    });
+
+    let invitationDelivered = false;
+    if (invitationToken) {
+      invitationDelivered = await sendAccountInvitationEmail(user.email, invitationToken, user.firstName);
+    }
+
+    return {
+      teacher: {
+        id: profile.id,
+        userId: user.id,
+        employeeCode,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        qualification: profile.qualification,
+        specialization: profile.specialization,
+      },
+      credentialDelivery: isTempPassword ? 'TEMP_PASSWORD' : 'EMAIL_INVITE',
+      invitationDelivered,
+      activationUrl: invitationToken ? buildAccountActivationUrl(invitationToken) : null,
+      temporaryPassword: isTempPassword ? rawPassword : null,
+    };
   }
 
   async getTeachers(req: AuthenticatedRequest) {
@@ -108,9 +217,9 @@ export class TeacherService {
       prisma.subject.findUnique({ where: { id: subjectId } }),
     ]);
 
-    if (!teacher) throw AppError.notFound('Teacher not found');
-    if (!classObj) throw AppError.notFound('Class not found');
-    if (!subject) throw AppError.notFound('Subject not found');
+    if (!teacher || teacher.deletedAt) throw AppError.notFound('Teacher not found');
+    if (!classObj || classObj.deletedAt) throw AppError.notFound('Class not found');
+    if (!subject || subject.deletedAt) throw AppError.notFound('Subject not found');
 
     const existing = await prisma.subjectTeacher.findUnique({
       where: { classId_subjectId: { classId, subjectId } },

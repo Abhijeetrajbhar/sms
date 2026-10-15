@@ -1,5 +1,5 @@
 import { Award, RefreshCw, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../common/PageHeader.jsx';
 import DataTable from '../common/DataTable.jsx';
 import Badge from '../ui/Badge.jsx';
@@ -11,7 +11,7 @@ import { statusTone } from '../../utils/statusStyles.js';
 const selectClass = 'focus-ring min-h-11 w-full rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-base font-semibold text-on-surface sm:text-sm';
 
 export default function TeacherMarksWorkspace({ data }) {
-  const mappings = data.teacherDashboard?.assignedSubjects || [];
+  const mappings = useMemo(() => data.teacherDashboard?.assignedSubjects || [], [data.teacherDashboard?.assignedSubjects]);
   const [mappingId, setMappingId] = useState(mappings[0]?.id || '');
   const [examType, setExamType] = useState('Mid-Term');
   const [term, setTerm] = useState('Term 1');
@@ -24,6 +24,13 @@ export default function TeacherMarksWorkspace({ data }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!mappingId && mappings.length) {
+      setMappingId(mappings[0].id);
+      setAcademicYear(mappings[0].class?.academicYear || academicYear);
+    }
+  }, [academicYear, mappingId, mappings]);
 
   const loadHistory = async () => {
     try {
@@ -77,19 +84,44 @@ export default function TeacherMarksWorkspace({ data }) {
     examType,
     term,
     academicYear,
-    entries: students.map((student) => ({
-      studentId: student.id,
-      marksObtained: Number(entries[student.id]?.marksObtained),
-      maxMarks: Number(entries[student.id]?.maxMarks || 100),
-      ...(entries[student.id]?.remarks ? { remarks: entries[student.id].remarks } : {}),
-    })),
+    entries: students.flatMap((student) => {
+      const entry = entries[student.id] || {};
+      const rawMarks = String(entry.marksObtained ?? '').trim();
+      if (!rawMarks) return [];
+
+      const marksObtained = Number(rawMarks);
+      const maxMarks = Number(entry.maxMarks || 100);
+      const studentName = `${student.user.firstName || ''} ${student.user.lastName || ''}`.trim() || student.studentCode;
+
+      if (!Number.isFinite(marksObtained) || !Number.isFinite(maxMarks) || maxMarks <= 0) {
+        throw new Error(`Enter valid marks for ${studentName}.`);
+      }
+      if (marksObtained < 0 || marksObtained > maxMarks) {
+        throw new Error(`${studentName}'s marks must be between 0 and ${maxMarks}.`);
+      }
+
+      return [{
+        studentId: student.id,
+        marksObtained,
+        maxMarks,
+        ...(entry.remarks ? { remarks: entry.remarks } : {}),
+      }];
+    }),
   });
 
   const saveDraft = async () => {
     setSaving(true);
     setError('');
     try {
-      await api.post('/results/teacher/marks/save-draft', payload());
+      if (!selected) throw new Error('Select an assigned class and subject.');
+      let draftPayload;
+      try {
+        draftPayload = payload();
+      } catch (validationError) {
+        throw new Error(validationError.message || 'Invalid marks entry.');
+      }
+      if (!draftPayload.entries.length) throw new Error('Enter marks for at least one student before saving.');
+      await api.post('/results/teacher/marks/save-draft', draftPayload);
       setNotice('Draft marks saved. You can continue editing until final submission.');
       await Promise.all([loadStudents(), loadHistory()]);
     } catch (saveError) {
@@ -104,6 +136,7 @@ export default function TeacherMarksWorkspace({ data }) {
     setSaving(true);
     setError('');
     try {
+      if (!selected) throw new Error('Select an assigned class and subject.');
       await api.post('/results/teacher/marks/submit-final', {
         classId: selected.class.id,
         subjectId: selected.subject.id,

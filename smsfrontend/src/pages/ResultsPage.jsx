@@ -1,45 +1,67 @@
 import { Award, Download } from 'lucide-react';
+import { useMemo } from 'react';
 import PageHeader from '../components/common/PageHeader.jsx';
 import DataTable from '../components/common/DataTable.jsx';
 import Card from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
+import Input from '../components/ui/Input.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import { useApp } from '../context/AppContext.jsx';
 import { downloadMarksheet, exportCsv } from '../utils/exporters.js';
 import { getScopedStudent, getStudentResults } from '../utils/studentScope.js';
 import TeacherMarksWorkspace from '../components/teacher/TeacherMarksWorkspace.jsx';
 import { hasPermission } from '../utils/permissions.js';
+import { useState } from 'react';
 
 export default function ResultsPage() {
   const { data, currentRole, currentUser, publishResults } = useApp();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState({ classId: '', examType: '', term: '', academicYear: '' });
+  const [publishError, setPublishError] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+
   if (currentRole === 'TEACHER') return <TeacherMarksWorkspace data={data} />;
   const scopedStudent = getScopedStudent(data, currentUser, currentRole);
   const isPersonalView = ['STUDENT', 'PARENT'].includes(currentRole);
-  const canPublish = currentRole === 'TEACHER' || (currentRole === 'ADMIN' && hasPermission(currentUser, 'results:publish'));
+  const canPublish = currentRole === 'ADMIN' && hasPermission(currentUser, 'results:publish');
   const canExport = currentRole === 'ADMIN' && hasPermission(currentUser, 'reports:export');
   const rows = isPersonalView ? getStudentResults(data, scopedStudent) : data.results;
-  const topResult = isPersonalView ? rows[0] : data.results.find((item) => item.rank === 1) || data.results[0];
+  const topResult = isPersonalView ? rows[0] : data.results[0];
   const personalColumns = [
     { key: 'subject', label: 'Subject' },
     { key: 'examType', label: 'Exam' },
     { key: 'term', label: 'Term' },
-    { key: 'total', label: 'Marks' },
+    { key: 'marks', label: 'Marks', render: (row) => `${row.marks ?? row.marksObtained ?? '-'}/${row.maxMarks ?? '-'}` },
     { key: 'percentage', label: 'Score', render: (row) => `${row.percentage || 0}%` },
-    { key: 'grade', label: 'Grade', render: (row) => <Badge tone={String(row.grade).includes('A') ? 'emerald' : String(row.grade).includes('B') ? 'blue' : 'amber'}>{row.grade}</Badge> },
+    { key: 'grade', label: 'Grade', render: (row) => <Badge tone={String(row.grade).includes('A') ? 'emerald' : String(row.grade).includes('B') ? 'blue' : 'amber'}>{String(row.grade).replace('_PLUS', '+')}</Badge> },
   ];
   const adminColumns = [
-    { key: 'rank', label: 'Rank', render: (row) => <Badge tone={row.rank <= 3 ? 'amber' : 'blue'}>#{row.rank}</Badge> },
     { key: 'student', label: 'Student' },
-    { key: 'math', label: 'Math' },
-    { key: 'physics', label: 'Physics' },
-    { key: 'english', label: 'English' },
-    { key: 'chemistry', label: 'Chemistry' },
-    { key: 'biology', label: 'Biology' },
-    { key: 'total', label: 'Total' },
-    { key: 'grade', label: 'Grade', render: (row) => <Badge tone={row.grade.includes('A') ? 'emerald' : row.grade.includes('B') ? 'blue' : 'rose'}>{row.grade}</Badge> },
+    { key: 'subject', label: 'Subject' },
+    { key: 'class', label: 'Class' },
+    { key: 'examType', label: 'Exam' },
+    { key: 'marks', label: 'Marks', render: (row) => `${row.marks ?? row.marksObtained ?? '-'}/${row.maxMarks ?? '-'}` },
+    { key: 'percentage', label: 'Score', render: (row) => `${row.percentage || 0}%` },
+    { key: 'grade', label: 'Grade', render: (row) => <Badge tone={String(row.grade).includes('A') ? 'emerald' : String(row.grade).includes('B') ? 'blue' : 'rose'}>{String(row.grade).replace('_PLUS', '+')}</Badge> },
   ];
-  const columns = currentRole === 'PARENT' ? personalColumns : adminColumns;
+  const columns = isPersonalView ? personalColumns : adminColumns;
+
+  const submitPublish = async (event) => {
+    event.preventDefault();
+    setIsPublishing(true);
+    setPublishError('');
+    try {
+      await publishResults(publishForm);
+      setPublishForm({ classId: '', examType: '', term: '', academicYear: '' });
+      setPublishOpen(false);
+    } catch (error) {
+      setPublishError(error.message || 'Submitted marks could not be published.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   return (
     <div className="page-shell">
@@ -49,7 +71,7 @@ export default function ResultsPage() {
         description={currentRole === 'PARENT' ? 'Published marks and academic history for the selected linked child only.' : isPersonalView ? 'Personal marksheet summary and student identity card for the signed-in learner.' : 'Visualize student marks, grade quality, subject performance, and rank positioning.'}
         actionLabel={canPublish ? 'Publish Result' : undefined}
         actionIcon={Award}
-        onAction={canPublish ? publishResults : undefined}
+        onAction={canPublish ? () => setPublishOpen(true) : undefined}
       />
       {isPersonalView ? (
         <Card>
@@ -98,6 +120,19 @@ export default function ResultsPage() {
         </div>
         <DataTable columns={columns} rows={rows} emptyText={isPersonalView ? 'No result found for this student' : 'No result records found'} />
       </Card>
+      <Modal open={publishOpen} title="Publish Submitted Marks" description="Only teacher-submitted marks for the selected class, exam, term, and academic year will be published." onClose={() => setPublishOpen(false)}>
+        <form className="grid gap-3" onSubmit={submitPublish}>
+          <select className="focus-ring min-h-11 rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-sm font-semibold text-on-surface" value={publishForm.classId} onChange={(event) => setPublishForm((value) => ({ ...value, classId: event.target.value }))} required>
+            <option value="">Select class</option>
+            {data.classes.map((item) => <option key={item.id} value={item.id}>{item.name} {item.section}</option>)}
+          </select>
+          <Input placeholder="Exam type, e.g. Mid-Term" value={publishForm.examType} onChange={(event) => setPublishForm((value) => ({ ...value, examType: event.target.value }))} required />
+          <Input placeholder="Term, e.g. Term 1" value={publishForm.term} onChange={(event) => setPublishForm((value) => ({ ...value, term: event.target.value }))} required />
+          <Input placeholder="Academic year, e.g. 2026-2027" value={publishForm.academicYear} onChange={(event) => setPublishForm((value) => ({ ...value, academicYear: event.target.value }))} required />
+          {publishError ? <p className="rounded-lg bg-error-container px-3 py-2 text-sm font-semibold text-on-error-container">{publishError}</p> : null}
+          <Button type="submit" variant="aurora" disabled={isPublishing}>{isPublishing ? 'Publishing...' : 'Publish Submitted Marks'}</Button>
+        </form>
+      </Modal>
     </div>
   );
 }

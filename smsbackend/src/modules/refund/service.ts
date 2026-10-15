@@ -209,6 +209,22 @@ export class RefundService {
             data: { status: PaymentAttemptStatus.REFUNDED },
           });
         }
+
+        // Immutable journal entry for the refund (append-only)
+        await tx.paymentLedger.create({
+          data: {
+            entryType: 'REFUND',
+            invoiceId: refund.invoiceId,
+            studentId: current.studentId,
+            amount: refund.amount,
+            currency: 'INR',
+            referenceId: id,
+            referenceType: 'Refund',
+            balanceAfter: netPaid,
+            actorId,
+          },
+        });
+
         return tx.refund.update({
           where: { id },
           data: {

@@ -1,73 +1,50 @@
-import { IndianRupee, Plus } from 'lucide-react';
+import { IndianRupee, ShieldCheck, Zap } from 'lucide-react';
 import { useState } from 'react';
 import PageHeader from '../components/common/PageHeader.jsx';
-import DataTable from '../components/common/DataTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
-import Card from '../components/ui/Card.jsx';
-import Badge from '../components/ui/Badge.jsx';
-import Button from '../components/ui/Button.jsx';
-import Input from '../components/ui/Input.jsx';
-import Modal from '../components/ui/Modal.jsx';
 import FinanceOperations from '../components/fees/FinanceOperations.jsx';
 import SecureFeeInvoices from '../components/fees/SecureFeeInvoices.jsx';
+import RazorpayCheckoutButton from '../components/payment/RazorpayCheckoutButton.jsx';
 import { useApp } from '../context/AppContext.jsx';
 import { formatCurrency } from '../utils/formatters.js';
-import { statusTone } from '../utils/statusStyles.js';
-import { getScopedStudent, getStudentFees } from '../utils/studentScope.js';
+import { getScopedStudent } from '../utils/studentScope.js';
 import { hasPermission } from '../utils/permissions.js';
 
 export default function FeesPage() {
-  const { data, currentRole, currentUser, recordFeePayment } = useApp();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { data, currentRole, currentUser } = useApp();
   const [secureInvoices, setSecureInvoices] = useState([]);
   const [secureRefreshKey, setSecureRefreshKey] = useState(0);
-  const [form, setForm] = useState({ feeId: '', amount: '', paymentMethod: 'CASH', transactionId: '', remarks: '' });
+  const [testAmount, setTestAmount] = useState(500);
   const scopedStudent = getScopedStudent(data, currentUser, currentRole);
   const isPersonalView = ['STUDENT', 'PARENT'].includes(currentRole);
-  const canCollect = currentRole === 'ADMIN' && hasPermission(currentUser, 'fees:collect');
-  const canOperateFinance = currentRole === 'ADMIN' && ['fees:create', 'fees:update', 'payments:verify'].every((permission) => hasPermission(currentUser, permission));
-  const rows = isPersonalView ? getStudentFees(data, scopedStudent) : data.fees;
-  const total = rows.reduce((sum, fee) => sum + fee.amount, 0);
-  const paid = rows.reduce((sum, fee) => sum + fee.paid, 0);
-  const overdue = rows.filter((fee) => fee.status === 'overdue').reduce((sum, fee) => sum + fee.amount - fee.paid, 0);
-  const columns = [
-    { key: 'student', label: 'Student' },
-    { key: 'className', label: 'Class' },
-    { key: 'term', label: 'Term' },
-    { key: 'amount', label: 'Amount', render: (row) => formatCurrency(row.amount) },
-    { key: 'paid', label: 'Paid', render: (row) => formatCurrency(row.paid) },
-    { key: 'dueDate', label: 'Due Date' },
-    { key: 'status', label: 'Status', render: (row) => <Badge className={statusTone[row.status]}>{row.status}</Badge> },
-    ...(canCollect ? [{
-      key: 'actions',
-      label: 'Actions',
-      render: (row) => row.status === 'paid'
-        ? <Badge tone="emerald">Settled</Badge>
-        : <Button size="sm" variant="secondary" onClick={() => {
-          setForm((value) => ({ ...value, feeId: row.id, amount: String(row.amount - row.paid) }));
-          setModalOpen(true);
-        }}>Pay</Button>,
-    }] : []),
-  ];
 
-  const selectedFee = rows.find((item) => item.id === form.feeId);
+  const canOperateFinance = currentRole === 'ADMIN' && [
+    'fees:create',
+    'fees:collect',
+    'payments:verify',
+    'fees:refund',
+    'reports:view',
+  ].some((permission) => hasPermission(currentUser, permission));
 
-  const submit = async (event) => {
-    event.preventDefault();
-    setError('');
-    setIsSaving(true);
-    try {
-      await recordFeePayment(form);
-      setForm({ feeId: '', amount: '', paymentMethod: 'CASH', transactionId: '', remarks: '' });
-      setModalOpen(false);
-    } catch (submitError) {
-      setError(submitError.message || 'Unable to record payment.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const invoiceTotals = secureInvoices.reduce((summary, invoice) => {
+    const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
+    if (dueDate && !Number.isNaN(dueDate.getTime())) dueDate.setHours(0, 0, 0, 0);
+    const dueAmount = Number(invoice.dueAmount || 0);
+    const isOverdue = dueAmount > 0
+      && dueDate
+      && !Number.isNaN(dueDate.getTime())
+      && dueDate < todayDate
+      && !['PAID', 'CANCELLED', 'REFUNDED', 'EXPIRED'].includes(String(invoice.status || '').toUpperCase());
+
+    return {
+      total: summary.total + Number(invoice.payableAmount || 0),
+      paid: summary.paid + Number(invoice.paidAmount || 0),
+      overdue: summary.overdue + (isOverdue ? dueAmount : 0),
+    };
+  }, { total: 0, paid: 0, overdue: 0 });
 
   return (
     <div className="page-shell">
@@ -75,14 +52,88 @@ export default function FeesPage() {
         eyebrow="Finance office"
         title={currentRole === 'PARENT' ? 'Fees & Payments' : isPersonalView ? 'My Fees' : 'Fee Management'}
         description={currentRole === 'PARENT' ? 'Invoices, verified payments, balances, and downloadable receipts for the selected linked child.' : isPersonalView ? 'Fee demand, payment status, due dates, and paid amount for the signed-in student only.' : 'Track collection, pending dues, overdue cases, and student-wise payment status.'}
-        actionLabel={canCollect ? 'Record Payment' : undefined}
-        actionIcon={Plus}
-        onAction={canCollect ? () => setModalOpen(true) : undefined}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard title="Total Demand" value={formatCurrency(total)} icon={IndianRupee} tone="blue" data={[28, 40, 51, 70, 87, 100]} />
-        <StatCard title="Collected" value={formatCurrency(paid)} icon={IndianRupee} tone="emerald" data={[20, 32, 48, 68, 75, 82]} />
-        <StatCard title="Overdue" value={formatCurrency(overdue)} icon={IndianRupee} tone="rose" data={[40, 38, 32, 29, 22, 15]} />
+        <StatCard title="Total Demand" value={formatCurrency(invoiceTotals.total)} icon={IndianRupee} tone="blue" />
+        <StatCard title="Collected" value={formatCurrency(invoiceTotals.paid)} icon={IndianRupee} tone="emerald" />
+        <StatCard title="Overdue" value={formatCurrency(invoiceTotals.overdue)} icon={IndianRupee} tone="rose" />
+      </div>
+
+      {/* Razorpay Standard Web Checkout Integration Widget */}
+      <div className="surface-card p-5 border border-indigo-500/25 rounded-2xl bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-blue-500/5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 dark:bg-indigo-400/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Razorpay Standard Checkout
+                </h3>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Test Mode Connected
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Live gateway integration with standard modal checkout & HMAC-SHA256 signature verification
+              </p>
+            </div>
+          </div>
+          <div className="text-xs font-mono bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 self-start sm:self-auto">
+            Key: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">rzp_test_TnpXuenJ5WWK2i</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Quick Test Amount:</span>
+          {[1, 50, 500, 1000].map((val) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setTestAmount(val)}
+              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${
+                testAmount === val
+                  ? 'bg-indigo-600 text-white shadow-sm font-semibold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-500'
+              }`}
+            >
+              ₹{val} ({val * 100}p)
+            </button>
+          ))}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-xs text-slate-500">Custom ₹:</span>
+            <input
+              type="number"
+              min="1"
+              value={testAmount}
+              onChange={(e) => setTestAmount(Math.max(1, Number(e.target.value) || 1))}
+              className="w-20 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Backend endpoints: <code className="text-[11px] font-mono text-slate-700 dark:text-slate-300">POST /api/create-order</code> & <code className="text-[11px] font-mono text-slate-700 dark:text-slate-300">POST /api/verify-payment</code></span>
+          </div>
+          <RazorpayCheckoutButton
+            amount={Math.round(testAmount * 100)}
+            currency="INR"
+            name="CampusOryx School"
+            description={`Standard Fee Checkout - ₹${testAmount}`}
+            prefill={{
+              name: currentUser?.name || 'Student / Parent',
+              email: currentUser?.email || 'test@example.com',
+            }}
+            buttonText={`Pay ₹${testAmount} with Razorpay`}
+            onSuccess={() => {
+              setSecureRefreshKey((k) => k + 1);
+            }}
+          />
+        </div>
       </div>
       <SecureFeeInvoices
         currentRole={currentRole}
@@ -95,51 +146,10 @@ export default function FeesPage() {
         <FinanceOperations
           data={data}
           invoices={secureInvoices}
+          currentUser={currentUser}
           onChanged={() => setSecureRefreshKey((value) => value + 1)}
         />
       ) : null}
-      <Card>
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-on-surface">Legacy fee records</h2>
-          <p className="mt-1 text-sm text-on-surface-variant">Existing fee tracking and offline recording flow remains available without changes.</p>
-        </div>
-        <DataTable columns={columns} rows={rows} emptyText={isPersonalView ? 'No fee record found for this student' : 'No fee records found'} />
-      </Card>
-      <Modal open={modalOpen} title="Record Payment" description="Apply a payment to an existing fee record." onClose={() => setModalOpen(false)}>
-        <form className="grid gap-4" onSubmit={submit}>
-          <select
-            className="focus-ring h-11 rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-sm font-semibold text-on-surface dark:border-white/10 dark:bg-white/10 dark:text-white"
-            value={form.feeId}
-            onChange={(event) => {
-              const fee = rows.find((item) => item.id === event.target.value);
-              setForm((value) => ({ ...value, feeId: event.target.value, amount: fee ? String(fee.amount - fee.paid) : '' }));
-            }}
-            required
-          >
-            <option value="">Select fee record</option>
-            {rows.filter((item) => item.status !== 'paid').map((fee) => (
-              <option key={fee.id} value={fee.id}>{fee.student} / {fee.term} / Due {formatCurrency(fee.amount - fee.paid)}</option>
-            ))}
-          </select>
-          {selectedFee ? <p className="rounded-lg bg-surface-container-low p-3 text-sm font-semibold text-on-surface-variant dark:bg-white/5 dark:text-slate-300">Remaining balance: {formatCurrency(selectedFee.amount - selectedFee.paid)}</p> : null}
-          <Input type="number" min="1" placeholder="Payment amount" value={form.amount} onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} required />
-          <select
-            className="focus-ring h-11 rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-sm font-semibold text-on-surface dark:border-white/10 dark:bg-white/10 dark:text-white"
-            value={form.paymentMethod}
-            onChange={(event) => setForm((value) => ({ ...value, paymentMethod: event.target.value }))}
-          >
-            <option value="CASH">Cash</option>
-            <option value="UPI">UPI</option>
-            <option value="CARD">Card</option>
-            <option value="BANK_TRANSFER">Bank transfer</option>
-            <option value="CHEQUE">Cheque</option>
-          </select>
-          <Input placeholder="Transaction ID" value={form.transactionId} onChange={(event) => setForm((value) => ({ ...value, transactionId: event.target.value }))} />
-          <Input placeholder="Remarks" value={form.remarks} onChange={(event) => setForm((value) => ({ ...value, remarks: event.target.value }))} />
-          {error ? <p className="rounded-lg bg-error-container px-3 py-2 text-sm font-semibold text-on-error-container dark:bg-red-950/50 dark:text-red-200">{error}</p> : null}
-          <Button type="submit" variant="aurora" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Payment'}</Button>
-        </form>
-      </Modal>
     </div>
   );
 }

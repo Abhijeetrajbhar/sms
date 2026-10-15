@@ -3,7 +3,6 @@ import prisma from '../../config/database';
 import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/apiResponse';
 import { getPaginationOptions } from '../../utils/pagination';
-import { Request } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { assertTeacherClassAccess, getTeacherScope } from '../teacher/access';
 import { assertParentClassAccess, getParentScope } from '../parent/access';
@@ -28,6 +27,10 @@ export class ClassService {
       },
     });
     if (existing) throw AppError.conflict('Class already exists for this academic year');
+    if (data.teacherId) {
+      const teacher = await prisma.teacherProfile.findUnique({ where: { id: data.teacherId } });
+      if (!teacher || teacher.deletedAt) throw AppError.notFound('Teacher not found');
+    }
 
     return prisma.class.create({ data: { ...data, capacity: data.capacity || 40 } });
   }
@@ -134,6 +137,10 @@ export class ClassService {
   }>) {
     const cls = await prisma.class.findUnique({ where: { id } });
     if (!cls || cls.deletedAt) throw AppError.notFound('Class not found');
+    if (data.teacherId) {
+      const teacher = await prisma.teacherProfile.findUnique({ where: { id: data.teacherId } });
+      if (!teacher || teacher.deletedAt) throw AppError.notFound('Teacher not found');
+    }
     return prisma.class.update({ where: { id }, data });
   }
 
@@ -229,9 +236,10 @@ export class SubjectService {
     description?: string;
     credits?: number;
   }) {
-    const existing = await prisma.subject.findUnique({ where: { code: data.code } });
-    if (existing) throw AppError.conflict(`Subject code '${data.code}' already exists`);
-    return prisma.subject.create({ data });
+    const code = data.code.trim().toUpperCase();
+    const existing = await prisma.subject.findUnique({ where: { code } });
+    if (existing) throw AppError.conflict(`Subject code '${code}' already exists`);
+    return prisma.subject.create({ data: { ...data, code } });
   }
 
   async getSubjects(user?: NonNullable<AuthenticatedRequest['user']>) {

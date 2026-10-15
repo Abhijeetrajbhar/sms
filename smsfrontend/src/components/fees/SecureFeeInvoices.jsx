@@ -1,4 +1,4 @@
-import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CreditCard, Download, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import DataTable from '../common/DataTable.jsx';
 import Badge from '../ui/Badge.jsx';
@@ -7,7 +7,10 @@ import Card from '../ui/Card.jsx';
 import { api } from '../../services/api.js';
 import { formatCurrency } from '../../utils/formatters.js';
 import { loadRazorpayCheckout } from '../../utils/razorpay.js';
+import { hasPermission } from '../../utils/permissions.js';
 import { statusTone } from '../../utils/statusStyles.js';
+
+import { useApp } from '../../context/AppContext.jsx';
 
 const PAYABLE = new Set(['UNPAID', 'PARTIAL', 'FAILED', 'PENDING']);
 
@@ -17,12 +20,16 @@ function idempotencyKey(invoiceId) {
 }
 
 export default function SecureFeeInvoices({ currentRole, currentUser, studentId, onInvoicesChange, refreshKey = 0 }) {
+  const { data: appData } = useApp();
   const [invoices, setInvoices] = useState([]);
   const [history, setHistory] = useState([]);
+  const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [processingId, setProcessingId] = useState('');
+  const [paymentConfig, setPaymentConfig] = useState({ gatewayConfigured: false, onlinePaymentsEnabled: false });
+  const canRefreshGatewayStatus = currentRole !== 'ADMIN' || hasPermission(currentUser, 'payments:verify');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,18 +37,28 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
     if (currentRole === 'PARENT' && !studentId) {
       setInvoices([]);
       setHistory([]);
+      setReceipts([]);
       onInvoicesChange?.([]);
       setLoading(false);
       return;
     }
     try {
-      const [invoiceResponse, historyResponse] = await Promise.all([
+      const [invoiceResponse, historyResponse, receiptResponse, configResponse] = await Promise.all([
         api.get(studentId ? `/fees/students/${studentId}/invoices?limit=100` : '/fees/invoices?limit=100'),
         api.get(`/payments/history?limit=100${studentId ? `&studentId=${encodeURIComponent(studentId)}` : ''}`),
+        api.get(`/receipts?limit=100${studentId ? `&studentId=${encodeURIComponent(studentId)}` : ''}`),
+        api.get('/payments/config'),
       ]);
-      const nextInvoices = Array.isArray(invoiceResponse?.data) ? invoiceResponse.data : [];
+      const rawInvoices = invoiceResponse?.data?.data || invoiceResponse?.data;
+      const nextInvoices = Array.isArray(rawInvoices) ? rawInvoices : [];
+      const rawHistory = historyResponse?.data?.data || historyResponse?.data;
+      const nextHistory = Array.isArray(rawHistory) ? rawHistory : [];
+      const rawReceipts = receiptResponse?.data?.data || receiptResponse?.data;
+      const nextReceipts = Array.isArray(rawReceipts) ? rawReceipts : [];
       setInvoices(nextInvoices);
-      setHistory(Array.isArray(historyResponse?.data) ? historyResponse.data : []);
+      setHistory(nextHistory);
+      setReceipts(nextReceipts);
+      setPaymentConfig(configResponse?.data?.data || configResponse?.data || { gatewayConfigured: false, onlinePaymentsEnabled: false });
       onInvoicesChange?.(nextInvoices);
     } catch (loadError) {
       setError(loadError.message || 'Secure fee invoices could not be loaded.');
@@ -61,6 +78,10 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
   }), { demand: 0, paid: 0, due: 0 }), [invoices]);
 
   const pay = async (invoice) => {
+    if (!paymentConfig.onlinePaymentsEnabled) {
+      setNotice('Online payment is not enabled for the student/parent portal. Please contact the school office for payment options.');
+      return;
+    }
     setProcessingId(invoice.id);
     setError('');
     setNotice('Creating a secure payment order. Do not refresh or close this page.');
@@ -74,10 +95,10 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
       const order = response.data;
       let checkoutCompleted = false;
       const checkout = new Razorpay({
-        key: order.keyId,
+        key: order.keyId || order.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TnpXuenJ5WWK2i',
         amount: order.amount,
-        currency: order.currency,
-        order_id: order.orderId,
+        currency: order.currency || 'INR',
+        order_id: order.orderId || order.order_id,
         name: 'CampusOryx School',
         description: `Fee invoice ${invoice.invoiceNumber}`,
         prefill: { name: currentUser?.name, email: currentUser?.email },
@@ -132,11 +153,11 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
     }
   };
 
-  const downloadReceipt = async (attempt) => {
-    setProcessingId(attempt.id);
+  const downloadReceipt = async (receipt) => {
+    setProcessingId(receipt.id);
     setError('');
     try {
-      await api.download(`/receipts/${attempt.receipt.id}/download`, `${attempt.receipt.receiptNumber}.pdf`);
+      await api.download(`/receipts/${receipt.id}/download`, `${receipt.receiptNumber}.pdf`);
     } catch (downloadError) {
       setError(downloadError.message || 'Receipt could not be downloaded.');
     } finally {
@@ -146,6 +167,14 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
 
   const invoiceColumns = [
     { key: 'invoiceNumber', label: 'Invoice' },
+    ...(currentRole === 'ADMIN' ? [{
+      key: 'student',
+      label: 'Student',
+      render: (row) => {
+        const student = (appData.students || []).find((s) => s.backendId === row.studentId || s.id === row.studentId);
+        return student ? `${student.name} (${student.className || ''})` : 'Student';
+      },
+    }] : []),
     { key: 'academicYear', label: 'Academic Year' },
     { key: 'payableAmount', label: 'Demand', render: (row) => formatCurrency(row.payableAmount) },
     { key: 'paidAmount', label: 'Paid', render: (row) => formatCurrency(row.paidAmount) },
@@ -155,9 +184,21 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
     ...(['STUDENT', 'PARENT'].includes(currentRole) ? [{
       key: 'actions',
       label: 'Action',
-      render: (row) => PAYABLE.has(row.status) && Number(row.dueAmount) > 0
-        ? <Button size="sm" disabled={Boolean(processingId)} onClick={() => pay(row)}>{processingId === row.id ? 'Processing...' : 'Pay Now'}</Button>
-        : <Badge tone="emerald">No payment due</Badge>,
+      render: (row) => PAYABLE.has(row.status) && Number(row.dueAmount) > 0 && paymentConfig.onlinePaymentsEnabled
+        ? (
+          <button
+            type="button"
+            disabled={Boolean(processingId)}
+            onClick={() => pay(row)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/25 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            {processingId === row.id ? 'Processing...' : 'Pay Now'}
+          </button>
+        )
+        : PAYABLE.has(row.status) && Number(row.dueAmount) > 0
+          ? <Badge tone="amber">Online payment unavailable</Badge>
+          : <Badge tone="emerald">No payment due</Badge>,
     }] : []),
   ];
 
@@ -167,35 +208,70 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
     { key: 'amount', label: 'Amount', render: (row) => formatCurrency(row.amount) },
     { key: 'status', label: 'Status', render: (row) => <Badge className={statusTone[String(row.status).toLowerCase()] || statusTone.info}>{String(row.status).replaceAll('_', ' ')}</Badge> },
     { key: 'actions', label: 'Action', render: (row) => row.receipt
-      ? <Button size="sm" variant="secondary" icon={Download} disabled={processingId === row.id} onClick={() => downloadReceipt(row)}>Receipt</Button>
-      : ['PENDING', 'AUTHORIZED', 'CREATED', 'FAILED'].includes(row.status)
+      ? <Button size="sm" variant="secondary" icon={Download} disabled={processingId === row.receipt.id} onClick={() => downloadReceipt(row.receipt)}>Receipt</Button>
+      : ['PENDING', 'AUTHORIZED', 'CREATED', 'FAILED'].includes(row.status) && paymentConfig.gatewayConfigured && canRefreshGatewayStatus
         ? <Button size="sm" variant="secondary" icon={RefreshCw} disabled={processingId === row.id} onClick={() => refreshAttempt(row)}>Refresh Status</Button>
-        : <span className="text-xs font-semibold text-on-surface-variant">Receipt after verification</span>,
+        : ['PENDING', 'AUTHORIZED', 'CREATED', 'FAILED'].includes(row.status)
+          ? <span className="text-xs font-semibold text-on-surface-variant">{paymentConfig.gatewayConfigured ? 'Verification permission required' : 'Gateway unavailable'}</span>
+          : <span className="text-xs font-semibold text-on-surface-variant">Receipt after verification</span>,
     },
+  ];
+
+  const receiptColumns = [
+    { key: 'issuedAt', label: 'Issued', render: (row) => String(row.issuedAt || '').slice(0, 10) },
+    { key: 'receiptNumber', label: 'Receipt' },
+    { key: 'invoiceId', label: 'Invoice Ref', render: (row) => String(row.invoiceId).slice(-8).toUpperCase() },
+    { key: 'amount', label: 'Amount', render: (row) => formatCurrency(row.amount) },
+    { key: 'paymentMode', label: 'Mode', render: (row) => String(row.paymentMode || '').replaceAll('_', ' ') },
+    { key: 'actions', label: 'Action', render: (row) => <Button size="sm" variant="secondary" icon={Download} disabled={processingId === row.id} onClick={() => downloadReceipt(row)}>Download</Button> },
   ];
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <Card className="overflow-hidden bg-gradient-to-br from-primary/10 via-surface-container-lowest to-secondary/10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="overflow-hidden border border-slate-200/80 dark:border-white/[0.08] bg-white dark:bg-slate-900/90 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100 dark:border-white/[0.06] pb-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-primary"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-extrabold uppercase tracking-wide">Backend verified payments</span></div>
-            <h2 className="mt-2 text-xl font-bold text-on-surface sm:text-2xl">Secure fee invoices</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-on-surface-variant">Amounts and final payment status come only from the school server and verified gateway records.</p>
+            <div className="flex items-center gap-2 text-brand-600 dark:text-brand-400">
+              <ShieldCheck className="h-5 w-5" />
+              <span className="text-xs font-bold uppercase tracking-wider font-mono">Backend Verified Payments</span>
+            </div>
+            <h2 className="mt-1.5 text-xl font-bold text-slate-900 dark:text-white sm:text-2xl font-display">Secure Fee Invoices</h2>
+            <p className="mt-1 max-w-2xl text-xs sm:text-sm leading-5 text-slate-500 dark:text-slate-400">
+              Official invoices, verified gateway transactions, and downloadable receipts linked to this student.
+            </p>
           </div>
           <Button variant="secondary" icon={RefreshCw} disabled={loading} onClick={load}>{loading ? 'Loading...' : 'Refresh'}</Button>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[['Invoice demand', totals.demand], ['Verified paid', totals.paid], ['Balance due', totals.due]].map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-outline-variant/40 bg-surface-container-lowest/75 p-4">
-              <p className="text-xs font-bold uppercase text-on-surface-variant">{label}</p>
-              <p className="mt-2 break-words text-xl font-extrabold text-on-surface">{formatCurrency(value)}</p>
-            </div>
-          ))}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/80 dark:bg-slate-800/50 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 font-mono">Total Invoiced</p>
+            <p className="mt-1.5 break-words text-2xl font-bold font-display text-slate-900 dark:text-white">{formatCurrency(totals.demand)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-950/20 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-mono">Verified Paid</p>
+            <p className="mt-1.5 break-words text-2xl font-bold font-display text-emerald-600 dark:text-emerald-400">{formatCurrency(totals.paid)}</p>
+          </div>
+          <div className={`rounded-xl border p-4 ${
+            totals.due > 0 
+              ? 'border-rose-200/80 dark:border-rose-500/20 bg-rose-50/60 dark:bg-rose-950/20' 
+              : 'border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-950/20'
+          }`}>
+            <p className={`text-xs font-bold uppercase tracking-wider font-mono ${
+              totals.due > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
+            }`}>
+              Balance Due
+            </p>
+            <p className={`mt-1.5 break-words text-2xl font-bold font-display ${
+              totals.due > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {formatCurrency(totals.due)}
+            </p>
+          </div>
         </div>
       </Card>
 
       {notice ? <p role="status" className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-on-surface">{notice}</p> : null}
+      {['STUDENT', 'PARENT'].includes(currentRole) && !paymentConfig.onlinePaymentsEnabled ? <p role="status" className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Online payment is currently unavailable. Your invoices and verified payment history remain accessible; contact the school office for payment options.</p> : null}
       {error ? <div role="alert" className="flex flex-col gap-3 rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button size="sm" variant="secondary" onClick={load}>Retry</Button></div> : null}
 
       <Card>
@@ -203,8 +279,12 @@ export default function SecureFeeInvoices({ currentRole, currentUser, studentId,
         <DataTable columns={invoiceColumns} rows={invoices} emptyText={loading ? 'Loading secure invoices...' : 'No secure fee invoices found'} />
       </Card>
       <Card>
-        <h2 className="mb-4 text-lg font-bold text-on-surface">Payment history</h2>
-        <DataTable columns={historyColumns} rows={history} emptyText={loading ? 'Loading payment history...' : 'No online payment attempts found'} />
+        <h2 className="mb-4 text-lg font-bold text-on-surface">Receipts</h2>
+        <DataTable columns={receiptColumns} rows={receipts} emptyText={loading ? 'Loading receipts...' : 'No verified receipts found'} />
+      </Card>
+      <Card>
+        <h2 className="mb-4 text-lg font-bold text-on-surface">Online payment attempts</h2>
+        <DataTable columns={historyColumns} rows={history} emptyText={loading ? 'Loading online payment attempts...' : 'No online payment attempts found'} />
       </Card>
     </div>
   );

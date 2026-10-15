@@ -2,7 +2,6 @@ import { Role } from '@prisma/client';
 
 export interface RegisterDto {
   email: string;
-  password: string;
   firstName: string;
   lastName: string;
   role: Role;
@@ -19,15 +18,6 @@ export interface ChangePasswordDto {
   newPassword: string;
 }
 
-export interface ForgotPasswordDto {
-  email: string;
-}
-
-export interface ResetPasswordDto {
-  token: string;
-  newPassword: string;
-}
-
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -39,8 +29,10 @@ export interface AuthUser {
   firstName: string;
   lastName: string;
   role: Role;
+  status: string;
   avatarUrl: string | null;
   isEmailVerified: boolean;
   permissions: string[];
   isSuperAdmin: boolean;
+  mustChangePassword?: boolean;
 }

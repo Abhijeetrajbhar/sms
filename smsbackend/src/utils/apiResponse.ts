@@ -36,21 +36,6 @@ export class ApiResponse {
   ): Response {
     return ApiResponse.success(res, { statusCode: 201, ...options });
   }
-
-  static error(
-    res: Response,
-    message: string,
-    statusCode = 500,
-    errors?: unknown
-  ): Response {
-    return res.status(statusCode).json({
-      success: false,
-      message,
-      data: null,
-      error: errors ?? { message },
-      ...(errors !== undefined && { errors }),
-    });
-  }
 }
 
 export function buildPaginationMeta(

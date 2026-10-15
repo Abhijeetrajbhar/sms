@@ -63,6 +63,6 @@ export function startReportCardWorker() {
     }
   });
 
-  logger.info('✅ Report card worker started');
+  if (worker) logger.info('Report card worker started');
   return worker;
 }

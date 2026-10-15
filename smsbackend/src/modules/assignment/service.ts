@@ -19,16 +19,38 @@ export class AssignmentService {
     classId: string;
     subjectId: string;
     teacherUserId: string;
+    teacherId?: string;
     dueDate: string;
     maxMarks?: number;
     isPublished?: boolean;
     file?: Express.Multer.File;
   }, req: AuthenticatedRequest) {
-    const teacher = await prisma.teacherProfile.findUnique({
-      where: { userId: data.teacherUserId },
-    });
-    if (!teacher) throw AppError.notFound('Teacher profile not found');
-    await assertTeacherSubjectAccess(req.user!, data.classId, data.subjectId);
+    let teacher = req.user?.role === 'TEACHER'
+      ? await prisma.teacherProfile.findUnique({ where: { userId: data.teacherUserId } })
+      : null;
+    if (req.user?.role === 'TEACHER') {
+      if (!teacher || teacher.deletedAt) throw AppError.notFound('Teacher profile not found');
+      await assertTeacherSubjectAccess(req.user!, data.classId, data.subjectId);
+    } else {
+      const assignment = data.teacherId
+        ? await prisma.subjectTeacher.findFirst({
+          where: {
+            classId: data.classId,
+            subjectId: data.subjectId,
+            teacherId: data.teacherId,
+            status: 'ACTIVE',
+          },
+          include: { teacher: true },
+        })
+        : await prisma.subjectTeacher.findUnique({
+          where: { classId_subjectId: { classId: data.classId, subjectId: data.subjectId } },
+          include: { teacher: true },
+        });
+      if (!assignment || assignment.status !== 'ACTIVE' || assignment.teacher.deletedAt) {
+        throw AppError.unprocessable('An active teacher assignment is required for this class and subject');
+      }
+      teacher = assignment.teacher;
+    }
     const dueDate = new Date(data.dueDate);
     if (Number.isNaN(dueDate.getTime()) || dueDate <= new Date()) {
       throw AppError.unprocessable('Assignment due date must be in the future');
@@ -78,7 +100,7 @@ export class AssignmentService {
 
     // Notify all students in class
     const students = await prisma.studentProfile.findMany({
-      where: { classId: data.classId },
+      where: { classId: data.classId, deletedAt: null, user: { status: 'ACTIVE', deletedAt: null } },
       select: { userId: true },
     });
 

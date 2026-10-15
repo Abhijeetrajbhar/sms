@@ -3,7 +3,6 @@ import PDFDocument from 'pdfkit';
 import { AppError } from '../../utils/AppError';
 import { calculateGrade, calculateOverallGPA, gradeToString } from '../../utils/grading';
 import { getAttendanceSummary } from '../../utils/attendance';
-import { uploadToCloudinary } from '../../middlewares/upload.middleware';
 import { reportCardQueue } from '../../config/queue';
 
 export class ReportCardService {
@@ -34,7 +33,7 @@ export class ReportCardService {
         include: { subject: { select: { name: true, code: true, credits: true } } },
       }),
       prisma.attendance.findMany({
-        where: { studentId: data.studentId },
+        where: { studentId: data.studentId, classId: data.classId },
         select: { status: true },
       }),
     ]);

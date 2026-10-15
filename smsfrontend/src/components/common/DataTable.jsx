@@ -5,7 +5,7 @@ export default function DataTable({ columns = [], rows = [], emptyText = 'No rec
   const safeRows = Array.isArray(rows) ? rows : [];
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[18px] border border-outline-variant/40 bg-surface-container-lowest/75 shadow-soft backdrop-blur-xl sm:rounded-[24px]">
+    <div className="min-w-0 overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm dark:border-white/[0.08] dark:bg-[#0c0e14] sm:rounded-[24px]">
       <div className="overscroll-x-contain overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
         <table className="min-w-[720px] divide-y divide-slate-100 text-left text-sm">
           <thead className="bg-surface-container-low/80 dark:bg-white/5">

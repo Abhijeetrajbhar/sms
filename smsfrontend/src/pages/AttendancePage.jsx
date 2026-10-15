@@ -23,6 +23,9 @@ export default function AttendancePage() {
   const monthlyRows = currentRole === 'PARENT'
     ? data.attendance.monthly
     : isPersonalView ? personalMonthly : data.attendance.monthly;
+  const monthlyTotal = Object.entries(monthlyRows)
+    .filter(([label]) => !['percentage', 'total'].includes(label))
+    .reduce((sum, [, value]) => sum + Number(value || 0), 0);
   const canExport = currentRole === 'ADMIN' && hasPermission(currentUser, 'reports:export');
   const columns = [
     { key: 'student', label: 'Student' },
@@ -56,7 +59,7 @@ export default function AttendancePage() {
             {Object.entries(monthlyRows).filter(([label]) => !['percentage', 'total'].includes(label)).map(([label, value]) => (
               <div key={label}>
                 <div className="mb-2 flex justify-between text-sm font-semibold capitalize text-on-surface-variant"><span>{label}</span><span>{value}</span></div>
-                <ProgressBar value={isPersonalView ? value : (value / 847) * 100} tone={label === 'present' ? 'emerald' : label === 'absent' ? 'rose' : label === 'late' ? 'amber' : 'blue'} />
+                <ProgressBar value={monthlyTotal > 0 ? (Number(value) / monthlyTotal) * 100 : 0} tone={label === 'present' ? 'emerald' : label === 'absent' ? 'rose' : label === 'late' ? 'amber' : 'blue'} />
               </div>
             ))}
           </div>

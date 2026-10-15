@@ -9,6 +9,7 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  activateAccountSchema,
 } from './validation';
 
 const router = Router();
@@ -18,6 +19,8 @@ router.post('/register', authRateLimit, validate(registerSchema), controller.reg
 router.post('/login', authRateLimit, validate(loginSchema), controller.login);
 router.post('/forgot-password', authRateLimit, validate(forgotPasswordSchema), controller.forgotPassword);
 router.post('/reset-password', authRateLimit, validate(resetPasswordSchema), controller.resetPassword);
+router.post('/activate-account', authRateLimit, validate(activateAccountSchema), controller.activateAccount);
+router.post('/resend-activation', authRateLimit, controller.resendActivation);
 router.post('/refresh-token', controller.refreshToken);
 
 // Protected routes

@@ -10,11 +10,36 @@ const service = new UserService();
 
 export const createUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const user = await service.createUser(req.body, req.user!.id, req);
-  ApiResponse.created(res, { message: 'User created', data: user });
+  ApiResponse.created(res, {
+    message: user.invitationDeferred
+      ? 'Pending user created. Send the invitation after profile setup is complete.'
+      : user.invitationDelivered
+      ? 'User created and invitation sent'
+      : 'User created, but invitation email failed. Use the development activation link or resend after configuring SMTP.',
+    data: user,
+  });
 });
 
 export const getPermissionCatalog = asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
   ApiResponse.success(res, { data: service.getPermissionCatalog() });
+});
+
+export const inviteUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await service.inviteUser(req.params.id, req.user!.id, req);
+  ApiResponse.success(res, {
+    message: result.invitationDelivered
+      ? 'Invitation sent successfully'
+      : 'Invitation created, but email delivery failed. You can copy the activation link directly.',
+    data: result,
+  });
+});
+
+export const getActivationLink = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await service.getActivationLink(req.params.id, req.user!.id, req);
+  ApiResponse.success(res, {
+    message: 'Activation link generated successfully',
+    data: result,
+  });
 });
 
 export const updatePermissions = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

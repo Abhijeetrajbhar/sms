@@ -22,6 +22,7 @@ export class AuthRepository {
         isEmailVerified: true,
         permissions: true,
         isSuperAdmin: true,
+        passwordResetToken: true,
         deletedAt: true,
       },
     });
@@ -39,7 +40,7 @@ export class AuthRepository {
       data: {
         ...data,
         email: data.email.toLowerCase(),
-        status: UserStatus.ACTIVE, // Auto-activate for demo; use PENDING_VERIFICATION in production
+        status: UserStatus.PENDING_VERIFICATION,
       },
       select: {
         id: true,
@@ -58,6 +59,30 @@ export class AuthRepository {
 
   async updateLastLogin(userId: string) {
     return prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+  }
+
+  async registerFailedLogin(userId: string, maxAttempts: number, lockMinutes: number) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return null;
+
+    const nextCount = (user.failedLoginCount ?? 0) + 1;
+    const shouldLock = nextCount >= maxAttempts;
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginCount: shouldLock ? 0 : nextCount,
+        ...(shouldLock
+          ? { lockedUntil: new Date(Date.now() + lockMinutes * 60 * 1000) }
+          : {}),
+      },
+    });
+  }
+
+  async clearFailedLogins(userId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginCount: 0, lockedUntil: null },
+    });
   }
 
   async createSession(data: {
@@ -102,7 +127,11 @@ export class AuthRepository {
   async updatePassword(userId: string, hashedPassword: string) {
     return prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
     });
   }
 
@@ -127,6 +156,41 @@ export class AuthRepository {
     return prisma.user.update({
       where: { id: userId },
       data: { passwordResetToken: null, passwordResetExpires: null },
+    });
+  }
+
+  async findByEmailVerificationToken(tokenHash: string) {
+    return prisma.user.findFirst({
+      where: {
+        emailVerifyToken: tokenHash,
+        emailVerifyExpires: { gt: new Date() },
+        status: UserStatus.PENDING_VERIFICATION,
+        deletedAt: null,
+      },
+    });
+  }
+
+  async setEmailVerificationToken(userId: string, token: string, expiresAt: Date) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifyToken: token,
+        emailVerifyExpires: expiresAt,
+        isEmailVerified: false,
+      },
+    });
+  }
+
+  async activateUser(userId: string, hashedPassword: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        status: UserStatus.ACTIVE,
+        isEmailVerified: true,
+        emailVerifyToken: null,
+        emailVerifyExpires: null,
+      },
     });
   }
 }

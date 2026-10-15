@@ -1,4 +1,5 @@
 import { Job } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { createWorker } from '../config/queue';
 import { cacheDelPattern } from '../config/redis';
 import prisma from '../config/database';
@@ -25,50 +26,83 @@ export function startAnalyticsWorker() {
           select: { id: true },
         });
 
-        let updated = 0;
+        const ids = students.map((s) => s.id);
+        if (!ids.length) break;
+
+        // Batch load all data with 3 queries instead of 3 per student
+        const [attendances, results, submissions] = await Promise.all([
+          prisma.attendance.findMany({
+            where: { studentId: { in: ids } },
+            select: { studentId: true, status: true },
+          }),
+          prisma.result.findMany({
+            where: { studentId: { in: ids }, isPublished: true },
+            select: { studentId: true, percentage: true },
+          }),
+          prisma.assignmentSubmission.findMany({
+            where: { studentId: { in: ids } },
+            select: { studentId: true, status: true, isLate: true },
+          }),
+        ]);
+
+        const attendanceByStudent = new Map<string, typeof attendances>();
+        for (const record of attendances) {
+          const list = attendanceByStudent.get(record.studentId) ?? [];
+          list.push(record);
+          attendanceByStudent.set(record.studentId, list);
+        }
+        const resultsByStudent = new Map<string, typeof results>();
+        for (const record of results) {
+          const list = resultsByStudent.get(record.studentId) ?? [];
+          list.push(record);
+          resultsByStudent.set(record.studentId, list);
+        }
+        const submissionsByStudent = new Map<string, typeof submissions>();
+        for (const record of submissions) {
+          const list = submissionsByStudent.get(record.studentId) ?? [];
+          list.push(record);
+          submissionsByStudent.set(record.studentId, list);
+        }
+
+        const updates: Prisma.PrismaPromise<unknown>[] = [];
         for (const { id } of students) {
           try {
-            const [attendances, results, submissions] = await Promise.all([
-              prisma.attendance.findMany({ where: { studentId: id }, select: { status: true } }),
-              prisma.result.findMany({
-                where: { studentId: id, isPublished: true },
-                select: { percentage: true },
-              }),
-              prisma.assignmentSubmission.findMany({
-                where: { studentId: id },
-                select: { status: true, isLate: true },
-              }),
-            ]);
-
-            const summary = getAttendanceSummary(attendances);
-            const avgMarks =
-              results.length
-                ? results.reduce((s, r) => s + r.percentage, 0) / results.length
-                : 0;
-            const missing = submissions.filter(
+            const summary = getAttendanceSummary(attendanceByStudent.get(id) ?? []);
+            const studentResults = resultsByStudent.get(id) ?? [];
+            const avgMarks = studentResults.length
+              ? studentResults.reduce((s, r) => s + r.percentage, 0) / studentResults.length
+              : 0;
+            const studentSubmissions = submissionsByStudent.get(id) ?? [];
+            const missing = studentSubmissions.filter(
               (s) => s.status === 'MISSING' || s.status === 'PENDING'
             ).length;
-            const late = submissions.filter((s) => s.isLate).length;
+            const late = studentSubmissions.filter((s) => s.isLate).length;
 
             const { riskScore, riskLevel } = calculateRiskScore({
               attendancePercentage: summary.percentage,
               averageMarks: avgMarks,
               missingAssignments: missing,
               lateSubmissions: late,
-              totalAssignments: submissions.length,
+              totalAssignments: studentSubmissions.length,
             });
 
-            await prisma.studentProfile.update({
-              where: { id },
-              data: { riskScore, riskLevel },
-            });
-            updated++;
+            updates.push(
+              prisma.studentProfile.update({
+                where: { id },
+                data: { riskScore, riskLevel },
+              })
+            );
           } catch (err) {
             logger.error(`Risk score update failed for student ${id}:`, err);
           }
         }
 
-        logger.info(`Risk scores updated for ${updated}/${students.length} students`);
+        // Execute in chunks to stay within transaction operation limits
+        for (let i = 0; i < updates.length; i += 100) {
+          await prisma.$transaction(updates.slice(i, i + 100));
+        }
+
+        logger.info(`Risk scores updated for ${updates.length}/${students.length} students`);
         break;
       }
 
@@ -89,6 +123,6 @@ export function startAnalyticsWorker() {
     }
   });
 
-  logger.info('✅ Analytics worker started');
+  if (worker) logger.info('Analytics worker started');
   return worker;
 }

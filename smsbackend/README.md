@@ -156,10 +156,18 @@ See `.env.example` for all required variables. Key ones:
 | `REDIS_URL` | Redis connection URL |
 | `JWT_ACCESS_SECRET` | Min 32 chars, access token signing |
 | `JWT_REFRESH_SECRET` | Min 32 chars, refresh token signing |
+| `CLIENT_URL` | Exact frontend origin and email-link base URL |
+| `COOKIE_SAME_SITE` | `lax` for same-site deployments; `none` for HTTPS cross-site deployments |
+| `REFRESH_COOKIE_MAX_AGE_MS` | Refresh-cookie lifetime; keep aligned with the refresh JWT lifetime |
 | `CLOUDINARY_*` | Cloud storage credentials |
 | `GEMINI_API_KEY` | Google Gemini AI key |
 | `OPENAI_API_KEY` | OpenAI key (alternative provider) |
 | `AI_PROVIDER` | `gemini` or `openai` |
+| `AI_ENABLED` | Enables external AI calls only when a valid provider key exists |
+| `ENABLE_QUEUES` | Enables notifications, report-card jobs, analytics jobs, and payment reconciliation |
+| `STUDENT_ONLINE_PAYMENTS_ENABLED` | Enables Razorpay checkout only when all Razorpay secrets are configured |
+
+Production startup rejects placeholder JWT, SMTP, database, and Cloudinary values. It also rejects incomplete AI or Razorpay configuration when those features are enabled.
 
 ---
 

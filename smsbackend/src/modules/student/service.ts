@@ -1,5 +1,6 @@
 // ─── Student Service ─────────────────────────────────────────────────────────
 import prisma from '../../config/database';
+import crypto from 'crypto';
 import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/apiResponse';
 import { getPaginationOptions } from '../../utils/pagination';
@@ -8,9 +9,11 @@ import { calculateRiskScore } from '../../utils/riskScore';
 import { Request } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { getTeacherScope } from '../teacher/access';
-import { AnnouncementTarget, AuditAction } from '@prisma/client';
+import { AnnouncementTarget, AuditAction, Role, UserStatus } from '@prisma/client';
 import { getLoggedInStudent } from './access';
 import { auditLog } from '../auditLog/service';
+import { hashPassword, generateRandomToken, hashToken } from '../../utils/password';
+import { sendAccountInvitationEmail, buildAccountActivationUrl } from '../../utils/email';
 
 export class StudentService {
   async getMyProfile(studentUserId: string) {
@@ -152,22 +155,23 @@ export class StudentService {
     admissionDate?: string;
   }) {
     const user = await prisma.user.findUnique({ where: { id: data.userId } });
-    if (!user) throw AppError.notFound('User not found');
+    if (!user || user.deletedAt) throw AppError.notFound('User not found');
     if (user.role !== 'STUDENT') throw AppError.badRequest('User is not a student');
+    if (user.status === 'INACTIVE' || user.status === 'SUSPENDED') {
+      throw AppError.unprocessable('Student profile requires an active or pending student account');
+    }
 
     const existing = await prisma.studentProfile.findUnique({ where: { userId: data.userId } });
     if (existing) throw AppError.conflict('Student profile already exists');
 
-    // Generate unique student code
-    const count = await prisma.studentProfile.count();
-    const studentCode = `STU${String(count + 1).padStart(5, '0')}`;
+    const studentCode = `STU${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 
     return prisma.studentProfile.create({
       data: {
         userId: data.userId,
         studentCode,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-        gender: data.gender as never,
+        ...(data.gender ? { gender: data.gender as 'MALE' | 'FEMALE' | 'OTHER' } : {}),
         address: data.address,
         bloodGroup: data.bloodGroup,
         admissionDate: data.admissionDate ? new Date(data.admissionDate) : new Date(),
@@ -176,15 +180,137 @@ export class StudentService {
     });
   }
 
+  async onboardStudent(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    dateOfBirth?: string;
+    gender?: 'MALE' | 'FEMALE' | 'OTHER';
+    address?: string;
+    bloodGroup?: string;
+    admissionDate?: string;
+    classId?: string;
+    parentId?: string;
+    credentialDelivery?: 'EMAIL_INVITE' | 'TEMP_PASSWORD';
+    temporaryPassword?: string;
+  }, actorId: string, req?: Request) {
+    if (!data.firstName?.trim() || !data.lastName?.trim() || !data.email?.trim()) {
+      throw AppError.badRequest('First name, last name, and email are required');
+    }
+
+    const email = data.email.toLowerCase().trim();
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw AppError.conflict('Email already registered');
+
+    if (data.classId) {
+      const cls = await prisma.class.findUnique({ where: { id: data.classId } });
+      if (!cls || cls.deletedAt) throw AppError.notFound('Selected class not found');
+    }
+
+    if (data.parentId) {
+      const parent = await prisma.parentProfile.findUnique({ where: { id: data.parentId } });
+      if (!parent || parent.deletedAt) throw AppError.notFound('Selected parent not found');
+    }
+
+    const isTempPassword = data.credentialDelivery === 'TEMP_PASSWORD';
+    let rawPassword = '';
+    let invitationToken: string | null = null;
+    let invitationExpires: Date | null = null;
+
+    if (isTempPassword) {
+      rawPassword = data.temporaryPassword?.trim() || `Oryx#${Math.floor(1000 + Math.random() * 9000)}`;
+    } else {
+      rawPassword = generateRandomToken();
+      invitationToken = generateRandomToken();
+      invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    }
+
+    const hashedPassword = await hashPassword(rawPassword);
+    const studentCode = `STU${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+
+    const { user, profile } = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          phone: data.phone?.trim() || undefined,
+          role: Role.STUDENT,
+          status: isTempPassword ? UserStatus.ACTIVE : UserStatus.PENDING_VERIFICATION,
+          isEmailVerified: isTempPassword,
+          emailVerifyToken: invitationToken ? hashToken(invitationToken) : null,
+          emailVerifyExpires: invitationExpires,
+          passwordResetToken: isTempPassword ? 'MUST_CHANGE_PASSWORD' : null,
+        },
+      });
+
+      const newProfile = await tx.studentProfile.create({
+        data: {
+          userId: newUser.id,
+          studentCode,
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+          ...(data.gender ? { gender: data.gender as any } : {}),
+          address: data.address?.trim() || undefined,
+          bloodGroup: data.bloodGroup?.trim() || undefined,
+          admissionDate: data.admissionDate ? new Date(data.admissionDate) : new Date(),
+          classId: data.classId || undefined,
+          parentIds: data.parentId ? [data.parentId] : [],
+        },
+        include: {
+          class: { select: { id: true, name: true, section: true, gradeLevel: true } },
+        },
+      });
+
+      return { user: newUser, profile: newProfile };
+    });
+
+    await auditLog({
+      actorId,
+      action: AuditAction.USER_CREATED,
+      entity: 'StudentOnboarding',
+      entityId: profile.id,
+      metadata: { email, studentCode, credentialDelivery: data.credentialDelivery || 'EMAIL_INVITE', classId: data.classId },
+      ipAddress: req?.ip,
+      userAgent: req?.headers['user-agent'],
+    });
+
+    let invitationDelivered = false;
+    if (invitationToken) {
+      invitationDelivered = await sendAccountInvitationEmail(user.email, invitationToken, user.firstName);
+    }
+
+    return {
+      student: {
+        id: profile.id,
+        userId: user.id,
+        studentCode,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        class: profile.class,
+        admissionDate: profile.admissionDate,
+      },
+      credentialDelivery: isTempPassword ? 'TEMP_PASSWORD' : 'EMAIL_INVITE',
+      invitationDelivered,
+      activationUrl: invitationToken ? buildAccountActivationUrl(invitationToken) : null,
+      temporaryPassword: isTempPassword ? rawPassword : null,
+    };
+  }
+
   async assignToClass(studentId: string, classId: string, actorId?: string, req?: Request) {
     const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
-    if (!student) throw AppError.notFound('Student not found');
+    if (!student || student.deletedAt) throw AppError.notFound('Student not found');
 
     const classObj = await prisma.class.findUnique({ where: { id: classId } });
-    if (!classObj) throw AppError.notFound('Class not found');
+    if (!classObj || classObj.deletedAt) throw AppError.notFound('Class not found');
+    if (student.classId === classId) return student;
 
     // Check capacity
-    const enrolled = await prisma.studentProfile.count({ where: { classId } });
+    const enrolled = await prisma.studentProfile.count({ where: { classId, deletedAt: null } });
     if (enrolled >= classObj.capacity) throw AppError.badRequest('Class is at full capacity');
 
     const updated = await prisma.studentProfile.update({
@@ -207,10 +333,10 @@ export class StudentService {
 
   async linkParent(studentId: string, parentId: string, actorId?: string, req?: Request) {
     const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
-    if (!student) throw AppError.notFound('Student not found');
+    if (!student || student.deletedAt) throw AppError.notFound('Student not found');
 
     const parent = await prisma.parentProfile.findUnique({ where: { id: parentId } });
-    if (!parent) throw AppError.notFound('Parent not found');
+    if (!parent || parent.deletedAt) throw AppError.notFound('Parent not found');
 
     if (student.parentIds.includes(parentId)) {
       throw AppError.conflict('Parent already linked to this student');

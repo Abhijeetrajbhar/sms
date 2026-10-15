@@ -11,38 +11,48 @@ import Modal from '../components/ui/Modal.jsx';
 import { useApp } from '../context/AppContext.jsx';
 import { percentage } from '../utils/formatters.js';
 import { statusTone } from '../utils/statusStyles.js';
-import { hasPermission } from '../utils/permissions.js';
 
 export default function AssignmentsPage() {
-  const { data, currentRole, currentUser, addAssignment, removeAssignment, retryData } = useApp();
+  const { data, currentRole, removeAssignment, retryData } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
   const [error, setError] = useState('');
   const mappings = data.teacherDashboard?.assignedSubjects || [];
   const [form, setForm] = useState({ title: '', description: '', mappingId: '', subject: '', className: '', dueDate: '', maxMarks: 100, isPublished: true, total: 1 });
-  const canManage = currentRole === 'TEACHER' || (currentRole === 'ADMIN' && hasPermission(currentUser, 'assignments:manage'));
+  const canManage = currentRole === 'TEACHER';
+
+  const remove = async (assignment) => {
+    if (!window.confirm(`Remove "${assignment.title}"? This action is allowed only when the backend assignment rules permit it.`)) return;
+    setDeletingId(assignment.id);
+    setError('');
+    try {
+      await removeAssignment(assignment.id);
+    } catch (removeError) {
+      setError(removeError.message || 'Assignment could not be removed.');
+    } finally {
+      setDeletingId('');
+    }
+  };
 
   const submit = async (event) => {
     event.preventDefault();
     setIsSaving(true);
     setError('');
     try {
-      if (currentRole === 'TEACHER') {
-        const mapping = mappings.find((item) => item.id === form.mappingId);
-        if (!mapping) throw new Error('Select an assigned class and subject.');
-        await api.post('/assignments', {
-          title: form.title,
-          description: form.description,
-          classId: mapping.class.id,
-          subjectId: mapping.subject.id,
-          dueDate: form.dueDate,
-          maxMarks: Number(form.maxMarks),
-          isPublished: form.isPublished,
-        });
-        retryData();
-      } else {
-        await addAssignment(form);
-      }
+      if (currentRole !== 'TEACHER') throw new Error('Only assigned teachers can create assignments from this screen.');
+      const mapping = mappings.find((item) => item.id === form.mappingId);
+      if (!mapping) throw new Error('Select an assigned class and subject.');
+      await api.post('/assignments', {
+        title: form.title,
+        description: form.description,
+        classId: mapping.class.id,
+        subjectId: mapping.subject.id,
+        dueDate: form.dueDate,
+        maxMarks: Number(form.maxMarks),
+        isPublished: form.isPublished,
+      });
+      retryData();
       setForm({ title: '', description: '', mappingId: '', subject: '', className: '', dueDate: '', maxMarks: 100, isPublished: true, total: 1 });
       setModalOpen(false);
     } catch (submitError) {
@@ -55,6 +65,7 @@ export default function AssignmentsPage() {
   return (
     <div className="page-shell">
       <PageHeader eyebrow="Academic workflow" title={currentRole === 'TEACHER' ? 'My Assignments' : currentRole === 'PARENT' ? 'Child Assignments' : currentRole === 'STUDENT' ? 'My Assignments' : 'Assignments'} description={currentRole === 'TEACHER' ? 'Create and manage assignments only for your assigned class-subject combinations.' : currentRole === 'PARENT' ? 'Published assignments, submission status, marks, and feedback for the selected linked child.' : currentRole === 'STUDENT' ? 'Published assignments for your class, with your submission status, marks, and feedback.' : 'Create, track, and grade assignments with live submission progress.'} actionLabel={canManage ? 'New Assignment' : undefined} actionIcon={Plus} onAction={() => setModalOpen(true)} />
+      {error && !modalOpen ? <p role="alert" className="rounded-lg bg-error-container px-3 py-2 text-sm font-semibold text-on-error-container">{error}</p> : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {data.assignments.map((assignment) => {
           const progress = percentage(assignment.submitted, assignment.total);
@@ -71,7 +82,7 @@ export default function AssignmentsPage() {
                 <div className="mb-2 flex justify-between text-sm font-semibold text-on-surface-variant"><span>Submitted</span><span>{assignment.submitted}/{assignment.total}</span></div>
                 <ProgressBar value={progress} tone={progress < 50 ? 'rose' : progress < 80 ? 'amber' : 'emerald'} />
               </div>
-              {canManage ? <Button variant="danger" size="sm" className="mt-5 w-full sm:w-auto" onClick={() => removeAssignment(assignment.id)}>Remove</Button> : null}
+              {canManage ? <Button variant="danger" size="sm" className="mt-5 w-full sm:w-auto" disabled={Boolean(deletingId)} onClick={() => remove(assignment)}>{deletingId === assignment.id ? 'Removing...' : 'Remove'}</Button> : null}
             </Card>
           );
         })}

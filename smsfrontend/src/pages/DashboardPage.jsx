@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { AlertTriangle, BarChart3, BrainCircuit, ClipboardCheck, GraduationCap, IndianRupee, Users } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatCard from '../components/common/StatCard.jsx';
@@ -9,10 +10,21 @@ import { useApp } from '../context/AppContext.jsx';
 import { formatCurrency, percentage } from '../utils/formatters.js';
 import { riskTone } from '../utils/statusStyles.js';
 import { getScopedStudent, getStudentFees, getStudentResults } from '../utils/studentScope.js';
-import TeacherDashboard from '../components/teacher/TeacherDashboard.jsx';
-import ParentDashboard from '../components/parent/ParentDashboard.jsx';
-import StudentDashboard from '../components/student/StudentDashboard.jsx';
-import AdminDashboard from '../components/admin/AdminDashboard.jsx';
+
+const TeacherDashboard = lazy(() => import('../components/teacher/TeacherDashboard.jsx'));
+const ParentDashboard = lazy(() => import('../components/parent/ParentDashboard.jsx'));
+const StudentDashboard = lazy(() => import('../components/student/StudentDashboard.jsx'));
+const AdminDashboard = lazy(() => import('../components/admin/AdminDashboard.jsx'));
+
+function DashboardLoader() {
+  return (
+    <div className="grid min-h-[50vh] place-items-center px-4 text-center">
+      <div className="rounded-2xl border border-outline-variant/50 bg-surface-container-lowest px-5 py-4 text-sm font-bold text-on-surface shadow-sm">
+        Loading dashboard...
+      </div>
+    </div>
+  );
+}
 
 function average(values) {
   const cleanValues = values.map(Number).filter((value) => Number.isFinite(value));
@@ -30,31 +42,43 @@ function statusBreakdown(rows = []) {
 export default function DashboardPage() {
   const { data, currentRole, currentUser, isDataLoading, dataError, retryData, selectedChildId, setSelectedChildId } = useApp();
   if (currentRole === 'ADMIN') {
-    return <AdminDashboard dashboard={data.dashboardAnalytics} currentUser={currentUser} isLoading={isDataLoading} error={dataError} onRetry={retryData} />;
+    return (
+      <Suspense fallback={<DashboardLoader />}>
+        <AdminDashboard dashboard={data.dashboardAnalytics} currentUser={currentUser} isLoading={isDataLoading} error={dataError} onRetry={retryData} />
+      </Suspense>
+    );
   }
   if (currentRole === 'TEACHER') {
-    return <TeacherDashboard dashboard={data.teacherDashboard} currentUser={currentUser} isLoading={isDataLoading} />;
+    return (
+      <Suspense fallback={<DashboardLoader />}>
+        <TeacherDashboard dashboard={data.teacherDashboard} currentUser={currentUser} isLoading={isDataLoading} error={dataError} onRetry={retryData} />
+      </Suspense>
+    );
   }
   if (currentRole === 'PARENT') {
     return (
-      <ParentDashboard
-        dashboard={data.parentDashboard}
-        selectedChildId={selectedChildId}
-        onSelectChild={setSelectedChildId}
-        isLoading={isDataLoading}
-        error={dataError}
-        onRetry={retryData}
-      />
+      <Suspense fallback={<DashboardLoader />}>
+        <ParentDashboard
+          dashboard={data.parentDashboard}
+          selectedChildId={selectedChildId}
+          onSelectChild={setSelectedChildId}
+          isLoading={isDataLoading}
+          error={dataError}
+          onRetry={retryData}
+        />
+      </Suspense>
     );
   }
   if (currentRole === 'STUDENT') {
     return (
-      <StudentDashboard
-        dashboard={data.studentDashboard}
-        isLoading={isDataLoading}
-        error={dataError}
-        onRetry={retryData}
-      />
+      <Suspense fallback={<DashboardLoader />}>
+        <StudentDashboard
+          dashboard={data.studentDashboard}
+          isLoading={isDataLoading}
+          error={dataError}
+          onRetry={retryData}
+        />
+      </Suspense>
     );
   }
   const analytics = data.dashboardAnalytics || {};
@@ -117,13 +141,13 @@ export default function DashboardPage() {
     STUDENT: [
       ['Attendance', `${analytics.attendance?.percentage ?? scopedStudent?.attendance ?? 0}%`, ClipboardCheck, 'emerald'],
       ['Assignments Due', (analytics.assignments?.missing ?? scopedAssignments.filter((item) => item.status === 'active').length).toLocaleString('en-IN'), GraduationCap, 'blue'],
-      ['Average Score', `${analytics.academic?.averageScore ?? scopedResults[0]?.total ?? 'N/A'}`, BarChart3, 'violet'],
+      ['Average Score', `${analytics.academic?.averageScore ?? (scopedResults[0]?.percentage ?? 'N/A')}`, BarChart3, 'violet'],
       ['Fee Status', scopedFees[0]?.status || 'pending', IndianRupee, 'amber'],
     ],
     PARENT: [
       ['Child Attendance', `${analytics.children?.[0]?.attendancePercentage ?? scopedStudent?.attendance ?? 0}%`, ClipboardCheck, 'emerald'],
       ['Assignments Due', scopedAssignments.filter((item) => item.status === 'active').length.toLocaleString('en-IN'), GraduationCap, 'blue'],
-      ['Average Score', `${analytics.children?.[0]?.averageScore ?? scopedResults[0]?.total ?? 'N/A'}`, BarChart3, 'violet'],
+      ['Average Score', `${analytics.children?.[0]?.averageScore ?? (scopedResults[0]?.percentage ?? 'N/A')}`, BarChart3, 'violet'],
       ['Pending Fees', scopedFees.filter((item) => item.status !== 'paid').length.toLocaleString('en-IN'), IndianRupee, 'amber'],
     ],
   };

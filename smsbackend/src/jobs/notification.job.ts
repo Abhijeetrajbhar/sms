@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { createWorker } from '../config/queue';
 import { NotificationService } from '../modules/notification/service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import logger from '../utils/logger';
 
@@ -120,62 +120,94 @@ export function startNotificationWorker() {
       }
 
       case 'checkAttendanceWarning': {
-        const { classId, entries } = data as {
-          classId: string;
+        const { entries } = data as {
           date: string;
           entries: Array<{ studentId: string; status: string }>;
         };
 
-        // Check each student's overall attendance after marking
-        for (const entry of entries) {
-          if (entry.status === 'ABSENT') {
-            const allRecords = await prisma.attendance.findMany({
-              where: { studentId: entry.studentId },
-              select: { status: true },
+        const absentStudentIds = [
+          ...new Set(
+            entries
+              .filter((e) => e.status === 'ABSENT')
+              .map((e) => e.studentId)
+          ),
+        ];
+        if (!absentStudentIds.length) break;
+
+        // Batch load attendance records for all absent students in one query
+        const allRecords = await prisma.attendance.findMany({
+          where: { studentId: { in: absentStudentIds } },
+          select: { studentId: true, status: true },
+        });
+
+        const recordsByStudent = new Map<string, typeof allRecords>();
+        for (const record of allRecords) {
+          const list = recordsByStudent.get(record.studentId) ?? [];
+          list.push(record);
+          recordsByStudent.set(record.studentId, list);
+        }
+
+        const percentageByStudent = new Map<string, number>();
+        for (const id of absentStudentIds) {
+          const records = recordsByStudent.get(id) ?? [];
+          const present = records.filter(
+            (r) => r.status === 'PRESENT' || r.status === 'LATE'
+          ).length;
+          const percentage = records.length > 0 ? (present / records.length) * 100 : 100;
+          if (percentage < 75) percentageByStudent.set(id, percentage);
+        }
+
+        if (!percentageByStudent.size) break;
+
+        // Batch load student profiles for low-attendance students in one query
+        const students = await prisma.studentProfile.findMany({
+          where: { id: { in: [...percentageByStudent.keys()] } },
+          select: { id: true, userId: true, parentIds: true },
+        });
+
+        // Batch load parent user ids in one query
+        const parentIds = [
+          ...new Set(students.flatMap((s) => s.parentIds)),
+        ];
+        const parents = parentIds.length
+          ? await prisma.parentProfile.findMany({
+              where: { id: { in: parentIds } },
+              select: { id: true, userId: true },
+            })
+          : [];
+        const parentUserByParentId = new Map(parents.map((p) => [p.id, p.userId]));
+
+        const notifications: Array<{
+          userId: string;
+          type: NotificationType;
+          title: string;
+          message: string;
+          metadata?: Prisma.InputJsonValue;
+        }> = [];
+        for (const student of students) {
+          const percentage = percentageByStudent.get(student.id)!;
+          notifications.push({
+            userId: student.userId,
+            type: NotificationType.ATTENDANCE_WARNING,
+            title: '⚠️ Low Attendance Warning',
+            message: `Your attendance has dropped to ${percentage.toFixed(1)}%. Minimum required is 75%.`,
+            metadata: { attendance: percentage, studentId: student.id },
+          });
+
+          for (const parentId of student.parentIds) {
+            const parentUserId = parentUserByParentId.get(parentId);
+            if (!parentUserId) continue;
+            notifications.push({
+              userId: parentUserId,
+              type: NotificationType.ATTENDANCE_WARNING,
+              title: "⚠️ Child's Low Attendance Warning",
+              message: `Your child's attendance has dropped to ${percentage.toFixed(1)}%. Please take action.`,
+              metadata: { attendance: percentage, studentId: student.id },
             });
-
-            const present = allRecords.filter(
-              (r) => r.status === 'PRESENT' || r.status === 'LATE'
-            ).length;
-            const percentage = allRecords.length > 0 ? (present / allRecords.length) * 100 : 100;
-
-            if (percentage < 75) {
-              const student = await prisma.studentProfile.findUnique({
-                where: { id: entry.studentId },
-                select: { userId: true, parentIds: true },
-              });
-
-              if (student) {
-                // Notify student
-                await notificationService.createNotification({
-                  userId: student.userId,
-                  type: NotificationType.ATTENDANCE_WARNING,
-                  title: '⚠️ Low Attendance Warning',
-                  message: `Your attendance has dropped to ${percentage.toFixed(1)}%. Minimum required is 75%.`,
-                  metadata: { attendance: percentage, studentId: entry.studentId },
-                });
-
-                // Notify parents
-                if (student.parentIds.length > 0) {
-                  const parents = await prisma.parentProfile.findMany({
-                    where: { id: { in: student.parentIds } },
-                    select: { userId: true },
-                  });
-
-                  for (const parent of parents) {
-                    await notificationService.createNotification({
-                      userId: parent.userId,
-                      type: NotificationType.ATTENDANCE_WARNING,
-                      title: "⚠️ Child's Low Attendance Warning",
-                      message: `Your child's attendance has dropped to ${percentage.toFixed(1)}%. Please take action.`,
-                      metadata: { attendance: percentage, studentId: entry.studentId },
-                    });
-                  }
-                }
-              }
-            }
           }
         }
+
+        await notificationService.createBulkNotifications(notifications);
         break;
       }
 
@@ -215,16 +247,33 @@ export function startNotificationWorker() {
         }
 
         if (target !== 'CLASS') {
-          const users = await prisma.user.findMany({ where, select: { id: true } });
-          const notifications = users.map((user) => ({
-            userId: user.id,
-            type: NotificationType.ANNOUNCEMENT,
-            title: 'New Announcement',
-            message: title,
-            metadata: { announcementId },
-          }));
-          await notificationService.createBulkNotifications(notifications);
-          logger.info(`Announcement notifications sent to ${users.length} users`);
+          // Load users in chunks to avoid pulling the entire user table into memory
+          const BATCH_SIZE = 500;
+          let cursor: { id: string } | undefined;
+          let total = 0;
+          while (true) {
+            const users = await prisma.user.findMany({
+              where,
+              select: { id: true },
+              orderBy: { id: 'asc' },
+              take: BATCH_SIZE,
+              ...(cursor ? { cursor: { id: cursor.id }, skip: 1 } : {}),
+            });
+            if (!users.length) break;
+
+            const notifications = users.map((user) => ({
+              userId: user.id,
+              type: NotificationType.ANNOUNCEMENT,
+              title: 'New Announcement',
+              message: title,
+              metadata: { announcementId },
+            }));
+            await notificationService.createBulkNotifications(notifications);
+            total += users.length;
+            if (users.length < BATCH_SIZE) break;
+            cursor = users[users.length - 1];
+          }
+          logger.info(`Announcement notifications sent to ${total} users`);
         }
         break;
       }
@@ -255,6 +304,6 @@ export function startNotificationWorker() {
     }
   });
 
-  logger.info('✅ Notification worker started');
+  if (worker) logger.info('Notification worker started');
   return worker;
 }

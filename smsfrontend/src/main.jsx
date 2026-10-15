@@ -6,6 +6,8 @@ import { AppProvider } from './context/AppContext.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import './styles.css';
 
+document.title = import.meta.env.VITE_APP_NAME || 'CampusOryx';
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>

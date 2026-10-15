@@ -22,7 +22,8 @@ export default function AcademicSetupPage() {
     setError('');
     try {
       const response = await api.get('/subjects');
-      setSubjects(Array.isArray(response.data) ? response.data : []);
+      const rows = response.data?.data || response.data;
+      setSubjects(Array.isArray(rows) ? rows : []);
     } catch (loadError) {
       setError(loadError.message || 'Unable to load academic setup.');
     }

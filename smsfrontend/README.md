@@ -51,7 +51,7 @@ npm run dev
 Open the URL shown in your terminal, usually:
 
 ```txt
-http://localhost:3000
+http://localhost:5173
 ```
 
 ## Connect with MERN backend
@@ -60,32 +60,21 @@ http://localhost:3000
 2. Set your backend URL:
 
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=http://localhost:5000/api/v1
 ```
 
-3. Replace mock data imports inside pages with API calls from:
+3. Authenticated role dashboards and management pages use the shared API client at:
 
 ```txt
 src/services/api.js
 ```
 
-Suggested backend endpoint mapping:
+The API client handles access tokens in memory, refreshes the HttpOnly session cookie, and reports network, timeout, authorization, and malformed-response errors consistently.
+
+Core backend endpoint prefix:
 
 ```txt
-GET    /api/dashboard/stats
-GET    /api/students
-POST   /api/students
-GET    /api/teachers
-GET    /api/classes
-GET    /api/attendance/today
-POST   /api/attendance/mark
-GET    /api/assignments
-GET    /api/results
-GET    /api/fees
-GET    /api/timetable
-GET    /api/announcements
-GET    /api/audit-logs
-GET    /api/ai-insights
+http://localhost:5000/api/v1
 ```
 
 ## Design Notes

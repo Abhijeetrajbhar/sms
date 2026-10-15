@@ -10,6 +10,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', teacherOrAdmin, requireAdminPermissionWhenAdmin('students:view'), controller.getStudents);
+router.post('/onboard', adminOnly, requireAdminPermission('students:create'), controller.onboardStudent);
 router.post('/', adminOnly, requireAdminPermission('students:create'), controller.createProfile);
 router.get('/me/profile', authorize(Role.STUDENT), controller.getMyProfile);
 router.get('/me/dashboard', authorize(Role.STUDENT), controller.getMyDashboard);

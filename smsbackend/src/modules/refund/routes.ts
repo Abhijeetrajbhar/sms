@@ -10,8 +10,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', requireAdminPermission('fees:view'), controller.listRefunds);
-router.post('/', requireAdminPermission('fees:refund'), paymentRateLimit, validate(requestRefundSchema), controller.requestRefund);
-router.post('/request', requireAdminPermission('fees:refund'), paymentRateLimit, validate(requestRefundSchema), controller.requestRefund);
+router.post(['/', '/request'], requireAdminPermission('fees:refund'), paymentRateLimit, validate(requestRefundSchema), controller.requestRefund);
 router.post('/:id/approve', requireAdminPermission('fees:refund'), paymentRateLimit, controller.approveRefund);
 router.post('/:id/reject', requireAdminPermission('fees:refund'), paymentRateLimit, validate(rejectRefundSchema), controller.rejectRefund);
 router.post('/:id/process', requireAdminPermission('fees:refund'), paymentRateLimit, controller.processRefund);

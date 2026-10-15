@@ -1,0 +1,77 @@
+services:
+  # ── Backend Web Service ───────────────────────────────────────────
+  - type: web
+    name: campusoryx-backend
+    env: node
+    region: oregon
+    plan: free
+    rootDir: smsbackend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CLIENT_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: COOKIE_SAME_SITE
+        value: none
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: STUDENT_ONLINE_PAYMENTS_ENABLED
+        value: true
+      - key: OFFLINE_PAYMENT_APPROVAL_REQUIRED
+        value: false
+      - key: SCHOOL_NAME
+        value: CampusOryx School
+
+  # ── Frontend Static Site ──────────────────────────────────────────
+  - type: web
+    name: campusoryx-frontend
+    env: static
+    region: oregon
+    plan: free
+    rootDir: smsfrontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_APP_NAME
+        value: CampusOryx School OS
+      - key: VITE_RAZORPAY_KEY_ID
+        sync: false

@@ -1,6 +1,9 @@
 import { NextFunction, Response } from 'express';
 import { AppError } from '../utils/AppError';
 import { AuthenticatedRequest } from './auth.middleware';
+import { assertStudentSelf } from '../modules/student/access';
+import { assertTeacherStudentAccess } from '../modules/teacher/access';
+import { assertParentStudentAccess } from '../modules/parent/access';
 
 type StudentIdSource = 'params' | 'query' | 'body';
 
@@ -18,21 +21,18 @@ export const requireStudentAccess = (
     if (!studentId) throw AppError.badRequest('Student ID is required');
 
     if (req.user.role === 'STUDENT') {
-      const { assertStudentSelf } = await import('../modules/student/access');
       await assertStudentSelf(req.user, studentId);
       next();
       return;
     }
 
     if (req.user.role === 'TEACHER') {
-      const { assertTeacherStudentAccess } = await import('../modules/teacher/access');
       await assertTeacherStudentAccess(req.user, studentId);
       next();
       return;
     }
 
     if (req.user.role === 'PARENT') {
-      const { assertParentStudentAccess } = await import('../modules/parent/access');
       await assertParentStudentAccess(req.user, studentId);
       next();
       return;

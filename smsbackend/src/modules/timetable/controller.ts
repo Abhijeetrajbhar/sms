@@ -7,6 +7,14 @@ import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 
 const service = new TimetableService();
 
+export const listTimetables = asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+  ApiResponse.success(res, { data: await service.listTimetables() });
+});
+
+export const getManagementOptions = asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+  ApiResponse.success(res, { data: await service.getManagementOptions() });
+});
+
 export const createTimetable = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const timetable = await service.createTimetable(req.body);
   ApiResponse.created(res, { message: 'Timetable created', data: timetable });

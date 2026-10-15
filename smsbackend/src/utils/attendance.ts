@@ -23,9 +23,7 @@ export function calculateAttendancePercentage(
   return Math.round((effectivePresent / total) * 100 * 100) / 100;
 }
 
-export function isLowAttendance(percentage: number): boolean {
-  return percentage < 75;
-}
+export const isLowAttendance = (percentage: number): boolean => percentage < 75;
 
 export function getAttendanceSummary(records: { status: AttendanceStatus }[]) {
   const summary = {

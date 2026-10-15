@@ -63,7 +63,12 @@ export const getStudentAttendance = asyncHandler(async (req: AuthenticatedReques
 export const getClassAttendance = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { date } = req.query;
   if (!date) throw AppError.badRequest('Date query param required');
-  const records = await service.getClassAttendance(req.params.classId, date as string, req.user!);
+  const records = await service.getClassAttendance(
+    req.params.classId,
+    date as string,
+    req.user!,
+    req.query.subjectId ? String(req.query.subjectId) : undefined
+  );
   ApiResponse.success(res, { data: records });
 });
 

@@ -54,6 +54,10 @@ async function razorpayRequest<T>(path: string, options: RequestInit = {}): Prom
 export const paymentGateway = {
   name: 'RAZORPAY',
 
+  isConfigured(): boolean {
+    return Boolean(config.RAZORPAY_KEY_ID && config.RAZORPAY_KEY_SECRET);
+  },
+
   getPublicKey(): string {
     return requireGatewayConfig().keyId;
   },
@@ -65,8 +69,16 @@ export const paymentGateway = {
         amount: input.amountPaise,
         currency: input.currency,
         receipt: input.receipt,
+        payment_capture: 1,
         notes: input.notes,
       }),
+    });
+  },
+
+  capturePayment(paymentId: string, amountPaise: number, currency: string = 'INR') {
+    return razorpayRequest<GatewayPayment>(`/payments/${encodeURIComponent(paymentId)}/capture`, {
+      method: 'POST',
+      body: JSON.stringify({ amount: amountPaise, currency }),
     });
   },
 
@@ -107,5 +119,9 @@ export function sha256(value: Buffer | string): string {
 function safeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  if (leftBuffer.length !== rightBuffer.length) {
+    crypto.timingSafeEqual(leftBuffer, leftBuffer);
+    return false;
+  }
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }

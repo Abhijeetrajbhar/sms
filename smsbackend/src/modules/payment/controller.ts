@@ -3,8 +3,25 @@ import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { ApiResponse } from '../../utils/apiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { PaymentService } from './service';
+import { Role } from '@prisma/client';
+import config from '../../config/env';
+import { paymentGateway } from './gateway';
 
 const service = new PaymentService();
+
+export const getConfig = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const gatewayConfigured = paymentGateway.isConfigured();
+  const isPortalPayer = req.user!.role === Role.STUDENT || req.user!.role === Role.PARENT;
+  const roleAllowsOnlinePayment = !isPortalPayer || config.STUDENT_ONLINE_PAYMENTS_ENABLED;
+  ApiResponse.success(res, {
+    data: {
+      gateway: 'razorpay',
+      gatewayConfigured,
+      onlinePaymentsEnabled: gatewayConfigured && roleAllowsOnlinePayment,
+      portalOnlinePaymentsEnabled: config.STUDENT_ONLINE_PAYMENTS_ENABLED,
+    },
+  });
+});
 
 export const createOrder = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const idempotencyKey = String(req.headers['idempotency-key'] || '');

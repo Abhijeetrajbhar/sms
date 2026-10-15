@@ -22,6 +22,10 @@ export const getReceipt = asyncHandler(async (req: AuthenticatedRequest, res: Re
   ApiResponse.success(res, { data: await service.getReceipt(req.params.receiptId, req.user!) });
 });
 
+export const listReceipts = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  ApiResponse.success(res, await service.listReceipts(req));
+});
+
 export const downloadReceipt = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { receipt, invoice, student } = await service.getReceipt(req.params.receiptId, req.user!);
   const items = invoice.feeItems as unknown as FeeItem[];

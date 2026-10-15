@@ -1,13 +1,22 @@
 import {
+  AlertCircle,
   Award,
   BellRing,
+  BookOpen,
+  CalendarCheck,
   CalendarDays,
+  CheckCircle2,
   ClipboardCheck,
+  CreditCard,
   Download,
   GraduationCap,
   IndianRupee,
   Megaphone,
   RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PageHeader from '../common/PageHeader.jsx';
@@ -17,21 +26,16 @@ import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import { formatCurrency } from '../../utils/formatters.js';
 
-const quickActions = [
-  ['Attendance', '/app/attendance', ClipboardCheck],
-  ['Pay Fees', '/app/fees', IndianRupee],
-  ['Assignments', '/app/assignments', BellRing],
-  ['Results', '/app/results', Award],
-  ['Timetable', '/app/timetable', CalendarDays],
-  ['Notices', '/app/announcements', Megaphone],
-];
-
-function name(user) {
+function childFullName(user) {
   return [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Student';
 }
 
-function EmptyState({ children }) {
-  return <p className="rounded-xl bg-surface-container-low p-4 text-sm font-semibold text-on-surface-variant">{children}</p>;
+function EmptyFeed({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-white/[0.08] bg-slate-50/50 dark:bg-slate-900/40 py-8 px-4 text-center">
+      <p className="font-mono text-xs text-slate-500 dark:text-slate-400">{message}</p>
+    </div>
+  );
 }
 
 export default function ParentDashboard({
@@ -43,7 +47,16 @@ export default function ParentDashboard({
   onRetry,
 }) {
   if (isLoading && !dashboard) {
-    return <div className="page-shell"><Card><EmptyState>Loading your family workspace...</EmptyState></Card></div>;
+    return (
+      <div className="page-shell">
+        <Card className="flex items-center justify-center py-16">
+          <div className="flex items-center gap-3 font-mono text-xs text-slate-600 dark:text-slate-400">
+            <RefreshCw className="h-4 w-4 animate-spin text-brand-600 dark:text-brand-400" />
+            Loading guardian telemetry...
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const children = dashboard?.children || [];
@@ -54,199 +67,287 @@ export default function ParentDashboard({
   const assignments = dashboard?.assignments || [];
   const results = dashboard?.results || [];
   const notices = dashboard?.notices || [];
+
   const dueAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.dueAmount || 0), 0);
-  const pendingAssignments = assignments.filter((assignment) => !assignment.submissions?.length && new Date(assignment.dueDate) >= new Date());
+  const paidAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.paidAmount || 0), 0);
+  const totalBilled = invoices.reduce((sum, invoice) => sum + Number(invoice.payableAmount || 0), 0);
+
+  const pendingAssignments = assignments.filter(
+    (assignment) => !assignment.submissions?.length && new Date(assignment.dueDate) >= new Date()
+  );
   const averageScore = results.length
     ? Math.round(results.reduce((sum, result) => sum + Number(result.percentage || 0), 0) / results.length)
     : 0;
-  const dayOfWeek = (new Date().getDay() + 6) % 7;
-  const todaySchedule = (dashboard?.timetable || []).filter((slot) => slot.dayOfWeek === dayOfWeek);
+
   const latestAttendance = dashboard?.attendance?.records?.[0];
 
+  const quickActions = [
+    { label: 'Attendance Log', path: '/app/attendance', icon: ClipboardCheck, color: 'text-emerald-500 dark:text-emerald-400' },
+    { label: 'Pay School Fees', path: '/app/fees', icon: CreditCard, color: 'text-brand-600 dark:text-brand-400' },
+    { label: 'Homework & Tasks', path: '/app/assignments', icon: BellRing, color: 'text-amber-500 dark:text-amber-400' },
+    { label: 'Published Marks', path: '/app/results', icon: Award, color: 'text-indigo-500 dark:text-indigo-400' },
+    { label: 'Weekly Timetable', path: '/app/timetable', icon: CalendarDays, color: 'text-sky-500 dark:text-sky-400' },
+    { label: 'School Notices', path: '/app/announcements', icon: Megaphone, color: 'text-purple-500 dark:text-purple-400' },
+  ];
+
   return (
-    <div className="page-shell">
+    <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Parent Workspace"
-        title="Your child at a glance"
-        description="Attendance, fees, assignments, published results, timetable, and notices for the selected linked child."
+        eyebrow="Guardian Cockpit"
+        title="Family Academic & Finance Overview"
+        description="Monitor daily roll-call presence, pay term fees with Razorpay, and review verified receipts."
       />
 
       {error ? (
-        <div role="alert" className="flex flex-col gap-3 rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container sm:flex-row sm:items-center sm:justify-between">
+        <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 font-mono text-xs text-rose-700 dark:text-rose-300 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
-          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry</Button>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry Sync</Button>
         </div>
       ) : null}
 
-      <Card className="overflow-hidden bg-gradient-to-br from-primary/10 via-surface-container-lowest to-secondary/10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-primary">Linked children</p>
-            <h2 className="mt-1 text-xl font-bold text-on-surface sm:text-2xl">{child ? name(child.user) : 'No linked child'}</h2>
-            <p className="mt-1 text-sm font-semibold text-on-surface-variant">
-              {child?.class ? `Class ${child.class.name} ${child.class.section} / ${child.class.academicYear}` : 'Ask the school administrator to verify and link a student profile.'}
-            </p>
+      {/* Linked Children Selector Header Card */}
+      <div className="surface-card p-5 border border-slate-200/80 dark:border-white/[0.08] rounded-2xl bg-white dark:bg-slate-900/90 shadow-sm transition-colors">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 place-items-center rounded-xl border border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-400 shadow-sm">
+              <Users className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {child ? childFullName(child.user) : 'No Linked Child'}
+                </h2>
+                <span className="font-mono text-[10px] font-semibold rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-0.5 text-brand-700 dark:text-brand-300">
+                  GUARDIAN LINK
+                </span>
+              </div>
+              <p className="font-mono text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {child?.class
+                  ? `Class ${child.class.name} ${child.class.section} • Academic Year ${child.class.academicYear}`
+                  : 'Contact administrator to verify and link a student'}
+              </p>
+            </div>
           </div>
-          {children.length ? (
-            <label className="grid gap-1 text-xs font-bold uppercase text-on-surface-variant">
-              Select child
+
+          {children.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-slate-600 dark:text-slate-400">Select Child:</span>
               <select
-                className="focus-ring min-h-11 min-w-56 rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-sm font-semibold normal-case text-on-surface"
                 value={selectedChildId || child?.id || ''}
-                onChange={(event) => onSelectChild(event.target.value)}
+                onChange={(e) => onSelectChild(e.target.value)}
+                className="font-mono text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-slate-900 dark:text-white font-medium focus:border-brand-500 focus:outline-none shadow-sm"
               >
-                {children.map((item) => (
-                  <option key={item.id} value={item.id}>{name(item.user)} / {item.studentCode}</option>
+                {children.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {childFullName(c.user)} ({c.studentCode})
+                  </option>
                 ))}
               </select>
-            </label>
-          ) : null}
+            </div>
+          )}
         </div>
-      </Card>
+      </div>
 
-      {!child ? <Card><EmptyState>No active linked child is available for this parent account.</EmptyState></Card> : (
+      {!child ? (
+        <Card>
+          <EmptyFeed message="No active linked child profile found for this parent account." />
+        </Card>
+      ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard title="Attendance" value={`${attendance.percentage || 0}%`} icon={ClipboardCheck} tone="emerald" />
-            <StatCard title="Fee Due" value={formatCurrency(dueAmount)} icon={IndianRupee} tone={dueAmount ? 'rose' : 'emerald'} />
-            <StatCard title="Assignments Due" value={pendingAssignments.length.toLocaleString('en-IN')} icon={BellRing} tone="blue" />
-            <StatCard title="Published Average" value={results.length ? `${averageScore}%` : 'N/A'} icon={Award} tone="violet" />
+          {/* KPI Metrics Row */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              title="Attendance Record"
+              value={`${attendance.percentage || 0}%`}
+              icon={ClipboardCheck}
+              tone="emerald"
+            />
+            <StatCard
+              title="Pending Fees"
+              value={formatCurrency(dueAmount)}
+              icon={IndianRupee}
+              tone={dueAmount > 0 ? 'rose' : 'emerald'}
+            />
+            <StatCard
+              title="Assignments Due"
+              value={pendingAssignments.length}
+              icon={BellRing}
+              tone="blue"
+            />
+            <StatCard
+              title="Academic Average"
+              value={results.length ? `${averageScore}%` : 'N/A'}
+              icon={Award}
+              tone="violet"
+            />
           </div>
 
-          <div className="grid gap-3 min-[425px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-            {quickActions.map(([label, path, Icon]) => (
-              <Link key={label} to={path} className="min-w-0">
-                <Card hover className="grid min-h-24 place-items-center gap-2 p-3 text-center">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <span className="text-sm font-bold text-on-surface">{label}</span>
+          {/* Quick Action Navigation Grid */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {quickActions.map(({ label, path, icon: Icon, color }) => (
+              <Link key={label} to={path}>
+                <Card hover className="flex flex-col items-center justify-center gap-2.5 p-4 text-center transition-all duration-200">
+                  <div className={`grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] ${color} shadow-sm`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{label}</span>
                 </Card>
               </Link>
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,.9fr)]">
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase text-primary">Important alerts</p>
-                  <h3 className="mt-1 text-lg font-bold text-on-surface">Needs attention</h3>
-                </div>
-                <BellRing className="h-6 w-6 text-amber-500" />
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Latest attendance</p>
-                  <p className="mt-2 font-bold capitalize text-on-surface">{latestAttendance?.status?.toLowerCase().replaceAll('_', ' ') || 'Not marked yet'}</p>
-                </div>
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Fee balance</p>
-                  <p className="mt-2 font-bold text-on-surface">{dueAmount ? formatCurrency(dueAmount) : 'No fee due'}</p>
-                </div>
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Assignments pending</p>
-                  <p className="mt-2 font-bold text-on-surface">{pendingAssignments.length || 'None'}</p>
-                </div>
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Latest result</p>
-                  <p className="mt-2 font-bold text-on-surface">{results[0] ? `${results[0].subject?.name || 'Subject'}: ${results[0].percentage}%` : 'No result published'}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center gap-3">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <div>
-                  <p className="text-xs font-bold uppercase text-primary">Child profile</p>
-                  <h3 className="mt-1 text-lg font-bold text-on-surface">{name(child.user)}</h3>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-2 text-sm">
-                {[
-                  ['Admission number', child.studentCode],
-                  ['Class', child.class ? `${child.class.name} ${child.class.section}` : 'Unassigned'],
-                  ['Academic year', child.class?.academicYear],
-                  ['Class teacher', child.class?.teacher?.user ? name(child.class.teacher.user) : 'Not assigned'],
-                  ['Blood group', child.bloodGroup],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex flex-wrap justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-2">
-                    <span className="font-semibold text-on-surface-variant">{label}</span>
-                    <span className="font-bold text-on-surface">{value || 'Not available'}</span>
+          {/* Urgent Alerts & Financial Overview */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Attention Card: Daily Attendance */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <BellRing className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">Daily Presence Alert</h3>
                   </div>
-                ))}
+                  <span className="font-mono text-xs text-slate-500 dark:text-slate-400">Today's Check</span>
+                </div>
+
+                <div className="rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/80 dark:bg-slate-900/40 p-4">
+                  <p className="font-mono text-xs text-slate-600 dark:text-slate-400">Latest Recorded Attendance Status:</p>
+                  <div className="mt-2.5 flex items-center gap-3">
+                    <span
+                      className={`font-mono text-xs font-bold px-3 py-1 rounded-full border ${
+                        latestAttendance?.status === 'PRESENT'
+                          ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                          : latestAttendance?.status === 'ABSENT'
+                          ? 'border-rose-300 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                          : 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                      }`}
+                    >
+                      {latestAttendance?.status || 'Awaiting roll call'}
+                    </span>
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                      {latestAttendance?.date ? String(latestAttendance.date).slice(0, 10) : 'Today'}
+                    </span>
+                  </div>
+                  {latestAttendance?.remarks && (
+                    <p className="mt-2.5 text-xs text-slate-600 dark:text-slate-400 italic">Teacher remark: {latestAttendance.remarks}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-slate-100 dark:border-white/[0.06] pt-3">
+                <Link to="/app/attendance" className="font-mono text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline inline-flex items-center gap-1">
+                  View full attendance calendar →
+                </Link>
               </div>
             </Card>
-          </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-on-surface">Today&apos;s timetable</h3>
-                <CalendarDays className="h-6 w-6 text-primary" />
-              </div>
-              <div className="mt-4 space-y-3">
-                {todaySchedule.length ? todaySchedule.map((slot) => (
-                  <div key={slot.id} className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
+            {/* Invoices & Fee Status Card */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">Fee Settlement Hub</h3>
+                  </div>
+                  <span className="font-mono text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    {invoices.length} {invoices.length === 1 ? 'Invoice' : 'Invoices'}
+                  </span>
+                </div>
+
+                <div className="space-y-3.5">
+                  {/* Balance Summary Banner */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/80 dark:bg-slate-900/40 p-4">
                     <div>
-                      <p className="font-bold text-on-surface">{slot.subject.name}</p>
-                      <p className="text-sm font-semibold text-on-surface-variant">{name(slot.teacher.user)} / {slot.room || 'Room TBD'}</p>
+                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Outstanding Balance Due</p>
+                      <p className={`mt-1 font-display text-2xl font-bold ${dueAmount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {formatCurrency(dueAmount)}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        <span>Paid: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(paidAmount)}</strong></span>
+                        <span>•</span>
+                        <span>Billed: {formatCurrency(totalBilled)}</span>
+                      </div>
                     </div>
-                    <Badge tone="blue">{slot.startTime}-{slot.endTime}</Badge>
-                  </div>
-                )) : <EmptyState>No timetable classes today.</EmptyState>}
-              </div>
-            </Card>
 
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-on-surface">Recent assignments</h3>
-                <BellRing className="h-6 w-6 text-primary" />
-              </div>
-              <div className="mt-4 space-y-3">
-                {assignments.length ? assignments.slice(0, 4).map((assignment) => (
-                  <div key={assignment.id} className="rounded-xl bg-surface-container-low p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-on-surface">{assignment.title}</p>
-                      <Badge tone={assignment.submissions?.length ? 'emerald' : 'amber'}>{assignment.submissions?.[0]?.status || 'Pending'}</Badge>
+                    {dueAmount > 0 ? (
+                      <Link to="/app/fees" className="self-start sm:self-auto">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/25 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          Pay Fees Online
+                        </button>
+                      </Link>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-auto">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-mono text-xs font-semibold">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          All Fees Settled
+                        </div>
+                        <Link to="/app/fees">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            Fee Ledger
+                          </button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* List of Invoices Preview */}
+                  {invoices.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="font-mono text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Recent Invoices
+                      </p>
+                      {invoices.slice(0, 3).map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-slate-800/60 text-xs"
+                        >
+                          <div>
+                            <div className="font-semibold text-slate-900 dark:text-white">
+                              {inv.title || inv.invoiceNumber || 'Term Fee Invoice'}
+                            </div>
+                            <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                              Due: {inv.dueDate ? String(inv.dueDate).slice(0, 10) : 'TBD'}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {formatCurrency(inv.payableAmount || inv.amount)}
+                            </div>
+                            <span
+                              className={`inline-block font-mono text-[10px] px-2 py-0.2 rounded-full font-semibold ${
+                                inv.status === 'PAID'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                  : inv.status === 'PARTIAL'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                              }`}
+                            >
+                              {inv.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-on-surface-variant">{assignment.subject.name} / Due {String(assignment.dueDate).slice(0, 10)}</p>
-                  </div>
-                )) : <EmptyState>No assignments for this child.</EmptyState>}
-              </div>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-on-surface">Fees and receipts</h3>
-                <IndianRupee className="h-6 w-6 text-primary" />
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Invoices</p>
-                  <p className="mt-2 text-xl font-bold text-on-surface">{invoices.length}</p>
-                </div>
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p className="text-xs font-bold uppercase text-on-surface-variant">Receipts available</p>
-                  <p className="mt-2 text-xl font-bold text-on-surface">{receipts.length}</p>
+                  )}
                 </div>
               </div>
-              <Link to="/app/fees"><Button className="mt-4 w-full sm:w-auto" variant="secondary" icon={Download}>View payments and receipts</Button></Link>
-            </Card>
 
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-on-surface">Relevant notices</h3>
-                <Megaphone className="h-6 w-6 text-primary" />
-              </div>
-              <div className="mt-4 space-y-3">
-                {notices.length ? notices.slice(0, 4).map((notice) => (
-                  <div key={notice.id} className="rounded-xl bg-surface-container-low p-4">
-                    <p className="font-bold text-on-surface">{notice.title}</p>
-                    <p className="mt-1 line-clamp-2 text-sm text-on-surface-variant">{notice.content}</p>
-                  </div>
-                )) : <EmptyState>No relevant notices.</EmptyState>}
+              <div className="mt-5 border-t border-slate-100 dark:border-white/[0.06] pt-3 flex items-center justify-between">
+                <Link to="/app/fees" className="font-mono text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline inline-flex items-center gap-1">
+                  Manage all invoices & receipts →
+                </Link>
+                {receipts.length > 0 && (
+                  <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> {receipts.length} Verified Receipt{receipts.length === 1 ? '' : 's'}
+                  </span>
+                )}
               </div>
             </Card>
           </div>

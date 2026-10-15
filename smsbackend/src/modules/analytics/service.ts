@@ -292,7 +292,7 @@ export class AnalyticsService {
 
       const childrenData = await Promise.all(
         students.map(async (student) => {
-          const [attendances, results, fees] = await Promise.all([
+          const [attendances, results, invoices, legacyFees] = await Promise.all([
             prisma.attendance.findMany({
               where: { studentId: student.id },
               select: { status: true },
@@ -300,6 +300,10 @@ export class AnalyticsService {
             prisma.result.findMany({
               where: { studentId: student.id, isPublished: true },
               select: { percentage: true },
+            }),
+            prisma.feeInvoice.findMany({
+              where: { studentId: student.id, status: { notIn: ['CANCELLED', 'REFUNDED'] } },
+              select: { payableAmount: true, paidAmount: true, dueAmount: true, status: true },
             }),
             prisma.fee.findMany({
               where: { studentId: student.id },
@@ -312,9 +316,19 @@ export class AnalyticsService {
             ? results.reduce((s, r) => s + r.percentage, 0) / results.length
             : 0;
 
-          const totalFees = fees.reduce((s, f) => s + f.amount, 0);
-          const paidFees = fees.reduce((s, f) => s + f.paidAmount, 0);
-          const overdueFees = fees.filter((f) => f.status === 'OVERDUE').length;
+          const invoiceTotal = invoices.reduce((s, i) => s + Number(i.payableAmount || 0), 0);
+          const invoicePaid = invoices.reduce((s, i) => s + Number(i.paidAmount || 0), 0);
+          const invoiceDue = invoices.reduce((s, i) => s + Number(i.dueAmount || 0), 0);
+          const invoiceOverdue = invoices.filter((i) => i.dueAmount > 0 && i.status !== 'PAID').length;
+
+          const legacyTotal = legacyFees.reduce((s, f) => s + f.amount, 0);
+          const legacyPaid = legacyFees.reduce((s, f) => s + f.paidAmount, 0);
+          const legacyOverdue = legacyFees.filter((f) => f.status === 'OVERDUE').length;
+
+          const totalFees = invoiceTotal > 0 ? invoiceTotal : legacyTotal;
+          const paidFees = invoiceTotal > 0 ? invoicePaid : legacyPaid;
+          const overdueFees = invoiceTotal > 0 ? invoiceOverdue : legacyOverdue;
+          const dueFees = invoiceTotal > 0 ? invoiceDue : Math.max(0, totalFees - paidFees);
 
           return {
             studentId: student.id,
@@ -325,7 +339,7 @@ export class AnalyticsService {
             riskScore: student.riskScore,
             attendancePercentage: attendanceSummary.percentage,
             averageScore: Math.round(avgScore * 100) / 100,
-            fees: { total: totalFees, paid: paidFees, overdueCount: overdueFees },
+            fees: { total: totalFees, paid: paidFees, due: dueFees, overdueCount: overdueFees },
           };
         })
       );

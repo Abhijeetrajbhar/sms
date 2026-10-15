@@ -1,0 +1,76 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CampusOryx School Management API",
+    "version": "1.0.0",
+    "description": "REST API for the CampusOryx school ERP. All protected endpoints require a bearer access token. Access is further restricted by user role, administrator permission, and student/class scope."
+  },
+  "servers": [{ "url": "http://localhost:5000", "description": "Local development" }],
+  "tags": [{ "name": "Operations" }, { "name": "Authentication" }, { "name": "Students" }, { "name": "Results" }, { "name": "Payments" }],
+  "paths": {
+    "/health": { "get": { "tags": ["Operations"], "summary": "Service health", "security": [], "responses": { "200": { "$ref": "#/components/responses/Health" } } } },
+    "/health/live": { "get": { "tags": ["Operations"], "summary": "Liveness probe", "security": [], "responses": { "200": { "$ref": "#/components/responses/Health" } } } },
+    "/health/ready": { "get": { "tags": ["Operations"], "summary": "Dependency readiness probe", "security": [], "responses": { "200": { "$ref": "#/components/responses/Health" }, "503": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/register": { "post": { "tags": ["Authentication"], "summary": "Submit a parent access request", "security": [], "requestBody": { "$ref": "#/components/requestBodies/Register" }, "responses": { "201": { "$ref": "#/components/responses/Success" }, "409": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/login": { "post": { "tags": ["Authentication"], "summary": "Sign in and issue access/refresh tokens", "security": [], "requestBody": { "$ref": "#/components/requestBodies/Login" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/activate-account": { "post": { "tags": ["Authentication"], "summary": "Activate an invited account", "security": [], "requestBody": { "$ref": "#/components/requestBodies/TokenPassword" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/forgot-password": { "post": { "tags": ["Authentication"], "summary": "Request password reset", "security": [], "requestBody": { "$ref": "#/components/requestBodies/Email" }, "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/auth/reset-password": { "post": { "tags": ["Authentication"], "summary": "Reset password with one-time token", "security": [], "requestBody": { "$ref": "#/components/requestBodies/TokenPassword" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/refresh-token": { "post": { "tags": ["Authentication"], "summary": "Rotate refresh token", "security": [], "responses": { "200": { "$ref": "#/components/responses/Success" }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/logout": { "post": { "tags": ["Authentication"], "summary": "Invalidate current refresh session", "responses": { "200": { "$ref": "#/components/responses/Success" }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/me": { "get": { "tags": ["Authentication"], "summary": "Get current authenticated user", "responses": { "200": { "$ref": "#/components/responses/Success" }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/auth/change-password": { "patch": { "tags": ["Authentication"], "summary": "Change password and revoke sessions", "requestBody": { "$ref": "#/components/requestBodies/ChangePassword" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/students": { "get": { "tags": ["Students"], "summary": "List students within caller scope", "responses": { "200": { "$ref": "#/components/responses/Success" } } }, "post": { "tags": ["Students"], "summary": "Create student profile (admin)", "responses": { "201": { "$ref": "#/components/responses/Success" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/students/me/profile": { "get": { "tags": ["Students"], "summary": "Get student self profile", "responses": { "200": { "$ref": "#/components/responses/Success" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/students/me/dashboard": { "get": { "tags": ["Students"], "summary": "Get student dashboard", "responses": { "200": { "$ref": "#/components/responses/Success" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/students/{id}": { "get": { "tags": ["Students"], "summary": "Get student subject to scope checks", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/students/{id}/assign-class": { "post": { "tags": ["Students"], "summary": "Assign a student to a class (admin)", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/students/{id}/link-parent": { "post": { "tags": ["Students"], "summary": "Link a parent to a student (admin)", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/students/{id}/attendance-summary": { "get": { "tags": ["Students"], "summary": "Get student attendance summary", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/students/{id}/risk": { "get": { "tags": ["Students"], "summary": "Get student risk profile", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/results": { "post": { "tags": ["Results"], "summary": "Create a draft result", "requestBody": { "$ref": "#/components/requestBodies/ResultEntry" }, "responses": { "201": { "$ref": "#/components/responses/Success" }, "422": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/results/bulk": { "post": { "tags": ["Results"], "summary": "Create draft results in bulk", "requestBody": { "$ref": "#/components/requestBodies/BulkResults" }, "responses": { "201": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/results/publish": { "post": { "tags": ["Results"], "summary": "Publish submitted results and lock records", "requestBody": { "$ref": "#/components/requestBodies/ResultPublication" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/results/{id}": { "patch": { "tags": ["Results"], "summary": "Update a draft result", "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "$ref": "#/components/requestBodies/ResultUpdate" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/results/{id}/unlock": { "post": { "tags": ["Results"], "summary": "Unlock a locked result (admin)", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/results/student/{studentId}": { "get": { "tags": ["Results"], "summary": "Get student results within caller scope", "parameters": [{ "$ref": "#/components/parameters/StudentId" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/results/class/{classId}": { "get": { "tags": ["Results"], "summary": "Get class results", "parameters": [{ "$ref": "#/components/parameters/ClassId" }], "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/payments/config": { "get": { "tags": ["Payments"], "summary": "Get public online-payment configuration", "responses": { "200": { "$ref": "#/components/responses/Success" } } } },
+    "/api/v1/payments/create-order": { "post": { "tags": ["Payments"], "summary": "Create idempotent Razorpay payment order", "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "$ref": "#/components/requestBodies/PaymentOrder" }, "responses": { "201": { "$ref": "#/components/responses/Success" }, "409": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/payments/verify": { "post": { "tags": ["Payments"], "summary": "Verify Razorpay payment signature", "requestBody": { "$ref": "#/components/requestBodies/PaymentVerification" }, "responses": { "200": { "$ref": "#/components/responses/Success" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/api/v1/payments/webhook": { "post": { "tags": ["Payments"], "summary": "Receive signed Razorpay webhook", "security": [], "parameters": [{ "name": "X-Razorpay-Signature", "in": "header", "required": true, "schema": { "type": "string" } }, { "name": "X-Razorpay-Event-Id", "in": "header", "schema": { "type": "string" } }], "responses": { "200": { "$ref": "#/components/responses/Success" }, "401": { "$ref": "#/components/responses/Error" } } } }
+  },
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "StudentId": { "name": "studentId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "ClassId": { "name": "classId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+    },
+    "requestBodies": {
+      "Email": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["email"], "properties": { "email": { "type": "string", "format": "email" } } } } } },
+      "Login": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string", "format": "password" } } } } } },
+      "Register": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["email", "firstName", "lastName", "role"], "properties": { "email": { "type": "string", "format": "email" }, "firstName": { "type": "string" }, "lastName": { "type": "string" }, "role": { "type": "string", "const": "PARENT" }, "phone": { "type": "string" } } } } } },
+      "TokenPassword": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["token", "password"], "properties": { "token": { "type": "string" }, "password": { "type": "string", "format": "password", "minLength": 8 } } } } } },
+      "ChangePassword": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["currentPassword", "newPassword"], "properties": { "currentPassword": { "type": "string", "format": "password" }, "newPassword": { "type": "string", "format": "password", "minLength": 8 } } } } } },
+      "ResultEntry": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["studentId", "classId", "subjectId", "examType", "academicYear", "term", "marksObtained"], "properties": { "studentId": { "type": "string" }, "classId": { "type": "string" }, "subjectId": { "type": "string" }, "examType": { "type": "string" }, "academicYear": { "type": "string" }, "term": { "type": "string" }, "marksObtained": { "type": "number", "minimum": 0 }, "maxMarks": { "type": "number", "exclusiveMinimum": 0 }, "remarks": { "type": "string", "maxLength": 500 } } } } } },
+      "BulkResults": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["classId", "examType", "academicYear", "term", "entries"], "properties": { "classId": { "type": "string" }, "examType": { "type": "string" }, "academicYear": { "type": "string" }, "term": { "type": "string" }, "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/ResultEntryItem" } } } } } } },
+      "ResultPublication": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["classId", "examType", "academicYear", "term"], "properties": { "classId": { "type": "string" }, "examType": { "type": "string" }, "academicYear": { "type": "string" }, "term": { "type": "string" } } } } } },
+      "ResultUpdate": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["marksObtained"], "properties": { "marksObtained": { "type": "number", "minimum": 0 }, "remarks": { "type": "string", "maxLength": 500 } } } } } },
+      "PaymentOrder": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["invoiceId"], "properties": { "invoiceId": { "type": "string" } } } } } },
+      "PaymentVerification": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["razorpay_order_id", "razorpay_payment_id", "razorpay_signature"], "properties": { "razorpay_order_id": { "type": "string" }, "razorpay_payment_id": { "type": "string" }, "razorpay_signature": { "type": "string" } } } } } }
+    },
+    "responses": {
+      "Success": { "description": "Successful API response", "headers": { "X-Request-Id": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessEnvelope" } } } },
+      "Error": { "description": "Structured API error", "headers": { "X-Request-Id": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Health": { "description": "Service health", "content": { "application/json": { "schema": { "type": "object" } } } }
+    },
+    "schemas": {
+      "SuccessEnvelope": { "type": "object", "required": ["success", "message", "error"], "properties": { "success": { "type": "boolean", "const": true }, "message": { "type": "string" }, "data": {}, "error": { "type": "null" } } },
+      "ErrorEnvelope": { "type": "object", "required": ["success", "message", "data", "error", "requestId"], "properties": { "success": { "type": "boolean", "const": false }, "message": { "type": "string" }, "data": { "type": "null" }, "error": {}, "requestId": { "type": "string" } } },
+      "ResultEntryItem": { "type": "object", "required": ["studentId", "subjectId", "marksObtained"], "properties": { "studentId": { "type": "string" }, "subjectId": { "type": "string" }, "marksObtained": { "type": "number", "minimum": 0 }, "maxMarks": { "type": "number", "exclusiveMinimum": 0 }, "remarks": { "type": "string" } } }
+    }
+  },
+  "security": [{ "bearerAuth": [] }]
+}

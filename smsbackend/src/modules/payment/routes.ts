@@ -11,6 +11,7 @@ import { requireAdminPermissionWhenAdmin } from '../../middlewares/adminPermissi
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN, Role.STUDENT, Role.PARENT));
 
+router.get('/config', controller.getConfig);
 router.post('/create-order', requireAdminPermissionWhenAdmin('fees:collect'), paymentRateLimit, validate(createOrderSchema), controller.createOrder);
 router.post('/verify', requireAdminPermissionWhenAdmin('payments:verify'), paymentRateLimit, validate(verifyPaymentSchema), controller.verify);
 router.get('/history', requireAdminPermissionWhenAdmin('fees:view'), controller.history);

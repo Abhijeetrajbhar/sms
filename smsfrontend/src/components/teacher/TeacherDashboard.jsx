@@ -2,172 +2,271 @@ import {
   Award,
   BellRing,
   BookOpen,
+  CalendarCheck,
   CalendarDays,
   ClipboardCheck,
   Clock3,
   GraduationCap,
+  Layers,
+  RefreshCw,
+  Sparkles,
+  UserCheck,
   Users,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PageHeader from '../common/PageHeader.jsx';
 import StatCard from '../common/StatCard.jsx';
-import Badge from '../ui/Badge.jsx';
 import Card from '../ui/Card.jsx';
+import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 
 function classLabel(item) {
-  return item ? `${item.name}${item.section ? ` ${item.section}` : ''}` : 'Assigned class';
+  return item ? `${item.name}${item.section ? ` ${item.section}` : ''}` : 'Assigned Class';
 }
 
-function EmptyState({ children }) {
-  return <p className="rounded-xl border border-dashed border-outline-variant/60 bg-surface-container-low px-4 py-6 text-center text-sm font-semibold text-on-surface-variant">{children}</p>;
+function EmptyFeed({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/20 py-8 px-4 text-center">
+      <p className="font-mono text-xs text-slate-500">{message}</p>
+    </div>
+  );
 }
 
-export default function TeacherDashboard({ dashboard, currentUser, isLoading }) {
+export default function TeacherDashboard({ dashboard, currentUser, isLoading, error, onRetry }) {
   const assignedClasses = dashboard?.assignedClasses || [];
   const assignedSubjects = dashboard?.assignedSubjects || [];
   const todayTimetable = dashboard?.todayTimetable || [];
-  const recentAssignments = dashboard?.recentAssignments || [];
-  const notices = dashboard?.notices || [];
-  const pendingAttendance = dashboard?.pendingAttendance || [];
   const pendingSubmissions = dashboard?.pendingSubmissions || [];
-  const marksTasks = dashboard?.marksTasks || [];
   const attendance = dashboard?.attendance || {};
+  const profile = dashboard?.profile;
 
   const quickActions = [
-    [ClipboardCheck, 'Mark Attendance', '/app/attendance'],
-    [BellRing, 'Create Assignment', '/app/assignments'],
-    [Award, 'Fill Marks', '/app/results'],
-    [Users, 'View Students', '/app/students'],
-    [CalendarDays, 'View Timetable', '/app/timetable'],
+    { label: 'Mark Attendance', path: '/app/attendance', icon: ClipboardCheck },
+    { label: 'Create Assignment', path: '/app/assignments', icon: BellRing },
+    { label: 'Record Marks', path: '/app/results', icon: Award },
+    { label: 'Student Roster', path: '/app/students', icon: Users },
+    { label: 'Class Timetable', path: '/app/timetable', icon: CalendarDays },
   ];
 
+  if (isLoading && !dashboard) {
+    return (
+      <div className="page-shell">
+        <Card className="flex items-center justify-center py-16">
+          <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
+            <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
+            Loading faculty cockpit...
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const teacherName = profile?.user?.firstName || currentUser?.name || 'Faculty Member';
+
   return (
-    <div className="page-shell">
+    <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Teacher workspace"
-        title={`Good day, ${dashboard?.profile?.user?.firstName || currentUser?.name || 'Teacher'}`}
-        description="Your classes, subjects, teaching tasks, and schedule. Only records assigned to you are shown."
+        eyebrow="Educator Cockpit"
+        title={`Welcome back, ${teacherName}`}
+        description="Assigned classes, daily lecture timetable, roll-call records, and assignment evaluation queues."
       />
 
-      {!dashboard && !isLoading ? (
-        <Card><EmptyState>No active classes or subjects are assigned to this teacher profile yet.</EmptyState></Card>
+      {error ? (
+        <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 font-mono text-xs text-rose-300 sm:flex-row sm:items-center sm:justify-between">
+          <span>{error}</span>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry</Button>
+        </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Assigned Classes" value={assignedClasses.length} icon={BookOpen} tone="violet" />
-        <StatCard title="My Students" value={dashboard?.studentCount || 0} icon={GraduationCap} tone="blue" />
-        <StatCard title="Attendance Today" value={`${attendance.percentage || 0}%`} icon={ClipboardCheck} tone="emerald" />
-        <StatCard title="Pending Reviews" value={pendingSubmissions.length} icon={BellRing} tone="amber" />
+      {/* KPI Telemetry Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Assigned Classes"
+          value={assignedClasses.length}
+          icon={BookOpen}
+          tone="violet"
+        />
+        <StatCard
+          title="Enrolled Learners"
+          value={dashboard?.studentCount || 0}
+          icon={GraduationCap}
+          tone="blue"
+        />
+        <StatCard
+          title="Today Roll-Call"
+          value={`${attendance.percentage || 0}%`}
+          icon={ClipboardCheck}
+          tone="emerald"
+        />
+        <StatCard
+          title="Pending Reviews"
+          value={pendingSubmissions.length}
+          icon={BellRing}
+          tone="amber"
+        />
       </div>
 
-      <Card>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-primary">Quick actions</p>
-            <h2 className="mt-1 text-lg font-bold text-on-surface">Continue your teaching workflow</h2>
+      {/* Command Palette Action Bar */}
+      <Card className="p-4 sm:p-5">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-4">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Teaching Actions
+            </p>
           </div>
-          <div className="grid gap-2 min-[425px]:grid-cols-2 sm:grid-cols-3 xl:flex">
-            {quickActions.map(([Icon, label, path]) => (
-              <Link key={label} to={path} className="min-w-0">
-                <Button className="w-full" variant="secondary" icon={Icon}>{label}</Button>
-              </Link>
-            ))}
-          </div>
+          <span className="font-mono text-[11px] text-slate-500">Quick Access</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+          {quickActions.map(({ label, path, icon: Icon }) => (
+            <Link key={label} to={path} className="group">
+              <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 transition hover:border-indigo-500/40 hover:bg-indigo-500/10">
+                <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 group-hover:text-indigo-400">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <span className="truncate text-xs font-semibold text-slate-200 group-hover:text-white">
+                  {label}
+                </span>
+              </div>
+            </Link>
+          ))}
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,.8fr)]">
-        <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div><p className="text-xs font-bold uppercase text-primary">Today</p><h2 className="mt-1 text-lg font-bold text-on-surface">My timetable</h2></div>
-            <Clock3 className="h-6 w-6 text-primary" />
+      {/* Timetable Schedule & Faculty Profile Details */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
+        {/* Today's Schedule */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-4 w-4 text-indigo-400" />
+              <h3 className="font-display text-base font-bold text-white">Today's Class Schedule</h3>
+            </div>
+            <Link to="/app/timetable" className="font-mono text-[11px] text-indigo-400 hover:underline">
+              Full Week Timetable
+            </Link>
           </div>
+
           <div className="space-y-3">
-            {todayTimetable.length ? todayTimetable.map((slot) => (
-              <div key={slot.id} className="flex flex-col gap-3 rounded-xl border border-outline-variant/40 bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{slot.startTime}-{slot.endTime}</Badge><Badge tone="violet">{classLabel(slot.class)}</Badge></div>
-                  <p className="mt-2 font-bold text-on-surface">{slot.subject?.name || 'Subject'}</p>
-                  <p className="text-sm text-on-surface-variant">{slot.room || 'Room not assigned'}</p>
+            {todayTimetable.length > 0 ? (
+              todayTimetable.map((slot) => (
+                <div
+                  key={slot.id}
+                  className="flex flex-col gap-3 rounded-xl border border-white/[0.08] bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[11px] rounded border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-indigo-300 font-semibold">
+                        {slot.startTime} - {slot.endTime}
+                      </span>
+                      <span className="font-mono text-[11px] rounded border border-white/10 bg-white/[0.04] px-2 py-0.5 text-slate-300">
+                        {classLabel(slot.class)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-white">{slot.subject?.name || 'Subject'}</p>
+                    <p className="font-mono text-xs text-slate-400">Location: {slot.room || 'Room not assigned'}</p>
+                  </div>
+                  <Link to="/app/attendance">
+                    <Button size="sm" variant="secondary" icon={ClipboardCheck}>
+                      Mark Roll
+                    </Button>
+                  </Link>
                 </div>
-                <Link to="/app/attendance"><Button size="sm" variant="secondary">Mark Attendance</Button></Link>
-              </div>
-            )) : <EmptyState>No timetable classes today.</EmptyState>}
+              ))
+            ) : (
+              <EmptyFeed message="No classes scheduled on your timetable today." />
+            )}
           </div>
         </Card>
 
-        <Card>
-          <p className="text-xs font-bold uppercase text-primary">Teacher profile</p>
-          <h2 className="mt-1 text-lg font-bold text-on-surface">{currentUser?.name}</h2>
-          <div className="mt-4 grid gap-3">
-            {[
-              ['Employee ID', dashboard?.profile?.employeeCode],
-              ['Specialization', dashboard?.profile?.specialization],
-              ['Qualification', dashboard?.profile?.qualification],
-              ['Experience', dashboard?.profile?.experience !== null && dashboard?.profile?.experience !== undefined ? `${dashboard.profile.experience} years` : null],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-surface-container-low p-3">
-                <p className="text-xs font-bold uppercase text-on-surface-variant">{label}</p>
-                <p className="mt-1 font-semibold text-on-surface">{value || 'Not provided'}</p>
+        {/* Faculty Profile Card */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-emerald-400" />
+                <h3 className="font-display text-base font-bold text-white">Faculty Credentials</h3>
               </div>
-            ))}
+              <span className="font-mono text-[10px] rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-400">
+                ACTIVE
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                { label: 'Employee ID', value: profile?.employeeCode },
+                { label: 'Specialization', value: profile?.specialization },
+                { label: 'Academic Qualification', value: profile?.qualification },
+                { label: 'Teaching Experience', value: profile?.experience ? `${profile.experience} Years` : null },
+              ].map((item, idx) => (
+                <div key={idx} className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                  <p className="font-mono text-[10px] uppercase text-slate-500">{item.label}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-200">
+                    {item.value || 'Not registered'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-white/[0.06] pt-3 font-mono text-[11px] text-slate-500">
+            Account verified: {currentUser?.email}
           </div>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-lg font-bold text-on-surface">Assigned classes and subjects</h2>
-          <div className="mt-4 space-y-3">
-            {assignedSubjects.length ? assignedSubjects.map((assignment) => (
-              <div key={assignment.id} className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="font-bold text-on-surface">{assignment.subject?.name}</p><p className="text-sm text-on-surface-variant">{classLabel(assignment.class)} / {assignment.class?.academicYear}</p></div>
-                <Badge tone={assignedClasses.find((item) => item.id === assignment.class?.id)?.isClassTeacher ? 'emerald' : 'blue'}>
-                  {assignedClasses.find((item) => item.id === assignment.class?.id)?.isClassTeacher ? 'Class teacher' : 'Subject teacher'}
-                </Badge>
-              </div>
-            )) : <EmptyState>No subjects assigned.</EmptyState>}
+      {/* Assigned Classes and Subjects Matrix */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-sky-400" />
+            <h3 className="font-display text-base font-bold text-white">Assigned Classes & Subjects</h3>
           </div>
-        </Card>
+          <span className="font-mono text-xs text-slate-500">{assignedSubjects.length} Allocations</span>
+        </div>
 
-        <Card>
-          <h2 className="text-lg font-bold text-on-surface">Pending teaching tasks</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-amber-50 p-4 text-amber-800"><p className="text-xs font-bold uppercase">Attendance</p><p className="mt-2 text-2xl font-extrabold">{pendingAttendance.length}</p></div>
-            <div className="rounded-xl bg-primary/10 p-4 text-primary"><p className="text-xs font-bold uppercase">Submissions</p><p className="mt-2 text-2xl font-extrabold">{pendingSubmissions.length}</p></div>
-            <div className="rounded-xl bg-emerald-50 p-4 text-emerald-800"><p className="text-xs font-bold uppercase">Marks groups</p><p className="mt-2 text-2xl font-extrabold">{marksTasks.filter((item) => item.status !== 'LOCKED').length}</p></div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-lg font-bold text-on-surface">My recent assignments</h2>
-          <div className="mt-4 space-y-3">
-            {recentAssignments.length ? recentAssignments.map((assignment) => (
-              <div key={assignment.id} className="rounded-xl border border-outline-variant/40 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2"><Badge tone="blue">{assignment.subject?.name}</Badge><Badge tone={assignment.isPublished ? 'emerald' : 'amber'}>{assignment.isPublished ? 'Published' : 'Draft'}</Badge></div>
-                <p className="mt-3 font-bold text-on-surface">{assignment.title}</p>
-                <p className="mt-1 text-sm text-on-surface-variant">{classLabel(assignment.class)} / Due {String(assignment.dueDate).slice(0, 10)}</p>
-              </div>
-            )) : <EmptyState>No assignments created yet.</EmptyState>}
-          </div>
-        </Card>
-
-        <Card>
-          <h2 className="text-lg font-bold text-on-surface">Relevant notices</h2>
-          <div className="mt-4 space-y-3">
-            {notices.length ? notices.map((notice) => (
-              <div key={notice.id} className="rounded-xl border border-outline-variant/40 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2"><Badge tone="amber">{notice.target}</Badge><span className="text-xs font-semibold text-on-surface-variant">{String(notice.createdAt).slice(0, 10)}</span></div>
-                <p className="mt-3 font-bold text-on-surface">{notice.title}</p>
-                <p className="mt-1 line-clamp-2 text-sm leading-6 text-on-surface-variant">{notice.content}</p>
-              </div>
-            )) : <EmptyState>No relevant notices.</EmptyState>}
-          </div>
-        </Card>
-      </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {assignedSubjects.length > 0 ? (
+            assignedSubjects.map((assignment) => {
+              const isClassTeacher = assignedClasses.some(
+                (c) => c.id === assignment.class?.id && c.isClassTeacher
+              );
+              return (
+                <div
+                  key={assignment.id}
+                  className="flex flex-col justify-between rounded-xl border border-white/[0.08] bg-black/20 p-4 transition hover:border-white/20"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-white">{assignment.subject?.name}</p>
+                      <span
+                        className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded border ${
+                          isClassTeacher
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                            : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                        }`}
+                      >
+                        {isClassTeacher ? 'Class Lead' : 'Subject Faculty'}
+                      </span>
+                    </div>
+                    <p className="mt-2 font-mono text-xs text-slate-400">
+                      {classLabel(assignment.class)}
+                    </p>
+                    <p className="font-mono text-[11px] text-slate-500">
+                      Term: {assignment.class?.academicYear || 'Current Year'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-full">
+              <EmptyFeed message="No classes or subjects currently assigned to your roster." />
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

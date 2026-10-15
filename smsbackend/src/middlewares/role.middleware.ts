@@ -24,6 +24,4 @@ export const authorize = (...roles: Role[]) => {
 // Shorthand helpers
 export const adminOnly = authorize(Role.ADMIN);
 export const teacherOrAdmin = authorize(Role.ADMIN, Role.TEACHER);
-export const studentOrAbove = authorize(Role.ADMIN, Role.TEACHER, Role.STUDENT);
-export const parentOrAbove = authorize(Role.ADMIN, Role.TEACHER, Role.PARENT);
 export const allRoles = authorize(Role.ADMIN, Role.TEACHER, Role.STUDENT, Role.PARENT);

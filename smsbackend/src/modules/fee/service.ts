@@ -5,7 +5,7 @@ import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/apiResponse';
 import { getPaginationOptions } from '../../utils/pagination';
 import { notificationQueue } from '../../config/queue';
-import { Request } from 'express';
+import { cacheDelPattern } from '../../config/redis';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 
 export class FeeService {
@@ -29,7 +29,12 @@ export class FeeService {
     term: string;
   }) {
     this.validateFeeInput(data.amount, data.dueDate);
-    return prisma.fee.create({
+    const student = await prisma.studentProfile.findUnique({ where: { id: data.studentId } });
+    if (!student || student.deletedAt) throw AppError.notFound('Student not found');
+    if (student.classId !== data.classId) throw AppError.unprocessable('Student does not belong to the selected class or section');
+    const classRecord = await prisma.class.findUnique({ where: { id: data.classId } });
+    if (!classRecord || classRecord.deletedAt) throw AppError.notFound('Class not found');
+    const fee = await prisma.fee.create({
       data: {
         ...data,
         dueDate: new Date(data.dueDate),
@@ -38,6 +43,8 @@ export class FeeService {
         student: { include: { user: { select: { firstName: true, lastName: true } } } },
       },
     });
+    await cacheDelPattern('analytics:*');
+    return fee;
   }
 
   async createClassFees(data: {
@@ -50,6 +57,8 @@ export class FeeService {
     term: string;
   }) {
     this.validateFeeInput(data.amount, data.dueDate);
+    const classRecord = await prisma.class.findUnique({ where: { id: data.classId } });
+    if (!classRecord || classRecord.deletedAt) throw AppError.notFound('Class not found');
     const students = await prisma.studentProfile.findMany({
       where: { classId: data.classId, deletedAt: null },
       select: { id: true, userId: true },
@@ -82,6 +91,7 @@ export class FeeService {
       dueDate: data.dueDate,
     });
 
+    await cacheDelPattern('analytics:*');
     return { created: fees.length };
   }
 
@@ -111,8 +121,8 @@ export class FeeService {
         ? FeeStatus.PARTIAL
         : fee.status;
 
-    const [payment, updatedFee] = await prisma.$transaction([
-      prisma.payment.create({
+    const { payment, updatedFee } = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
         data: {
           feeId,
           amount: data.amount,
@@ -120,16 +130,28 @@ export class FeeService {
           transactionId: data.transactionId,
           remarks: data.remarks,
         },
-      }),
-      prisma.fee.update({
-        where: { id: feeId },
+      });
+      const updateResult = await tx.fee.updateMany({
+        where: {
+          id: feeId,
+          paidAmount: fee.paidAmount,
+          status: fee.status,
+        },
         data: { paidAmount: newPaid, status: newStatus },
+      });
+      if (updateResult.count !== 1) {
+        throw AppError.conflict('Fee balance changed while recording the payment');
+      }
+      const updatedFee = await tx.fee.findUniqueOrThrow({
+        where: { id: feeId },
         include: {
           student: { include: { user: { select: { firstName: true, lastName: true } } } },
         },
-      }),
-    ]);
+      });
+      return { payment, updatedFee };
+    });
 
+    await cacheDelPattern('analytics:*');
     return { payment, fee: updatedFee };
   }
 
@@ -137,11 +159,14 @@ export class FeeService {
     if (!reason?.trim()) throw AppError.badRequest('Waiver reason is required');
     const fee = await prisma.fee.findUnique({ where: { id: feeId } });
     if (!fee) throw AppError.notFound('Fee not found');
+    if (fee.status === FeeStatus.PAID) throw AppError.badRequest('Paid fees cannot be waived');
 
-    return prisma.fee.update({
+    const waived = await prisma.fee.update({
       where: { id: feeId },
       data: { status: FeeStatus.WAIVED, waiverReason: reason.trim() },
     });
+    await cacheDelPattern('analytics:*');
+    return waived;
   }
 
   async getFees(req: AuthenticatedRequest) {
@@ -213,6 +238,7 @@ export class FeeService {
       },
       data: { status: FeeStatus.OVERDUE },
     });
+    await cacheDelPattern('analytics:*');
     return updated;
   }
 

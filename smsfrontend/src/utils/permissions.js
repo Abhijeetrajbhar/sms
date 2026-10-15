@@ -1,5 +1,5 @@
 export function isSuperAdmin(user) {
-  return user?.role === 'ADMIN' && (Boolean(user.isSuperAdmin) || !user.permissions?.length);
+  return user?.role === 'ADMIN' && Boolean(user.isSuperAdmin);
 }
 
 export function hasPermission(user, permission) {

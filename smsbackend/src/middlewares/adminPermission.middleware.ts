@@ -6,7 +6,7 @@ import { AdminPermission } from '../modules/admin/permissions';
 type AuthUser = NonNullable<AuthenticatedRequest['user']>;
 
 export function isSuperAdmin(user: AuthUser): boolean {
-  return user.role === 'ADMIN' && (user.isSuperAdmin || user.permissions.length === 0);
+  return user.role === 'ADMIN' && user.isSuperAdmin === true;
 }
 
 export function hasAdminPermission(user: AuthUser, permission: AdminPermission): boolean {

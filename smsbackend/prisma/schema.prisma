@@ -31,6 +31,18 @@ enum Gender {
   OTHER
 }
 
+enum SchoolStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Currency {
+  INR
+  USD
+  EUR
+  GBP
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -158,6 +170,43 @@ enum AnnouncementTarget {
   CLASS
 }
 
+enum AdmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  WAITLISTED
+  ACCEPTED
+  REJECTED
+  ENROLLED
+}
+
+enum AcademicCalendarEventType {
+  TERM
+  HOLIDAY
+  EXAM
+  EVENT
+}
+
+enum StudentDocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum LeaveRequestType {
+  SICK
+  PERSONAL
+  DUTY
+  OTHER
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum AuditAction {
   LOGIN
   LOGOUT
@@ -196,6 +245,24 @@ enum AuditAction {
   PASSWORD_RESET
 }
 
+// ─── School / Tenant Model ───────────────────────────────────────────────────
+
+model School {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  slug      String       @unique
+  name      String
+  domain    String?      @unique
+  logoUrl   String?
+  currency  Currency     @default(INR)
+  timezone  String       @default("Asia/Kolkata")
+  status    SchoolStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([status])
+  @@map("schools")
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -211,11 +278,15 @@ model User {
   avatarPublicId  String?
   permissions     String[]   @default([])
   isSuperAdmin    Boolean    @default(false)
+  schoolId        String?    @db.ObjectId
   lastLoginAt     DateTime?
   isEmailVerified Boolean    @default(false)
   emailVerifyToken String?
+  emailVerifyExpires DateTime?
   passwordResetToken String?
   passwordResetExpires DateTime?
+  failedLoginCount Int      @default(0)
+  lockedUntil      DateTime?
   deletedAt       DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -229,15 +300,45 @@ model User {
   parentProfile   ParentProfile?
   announcements   Announcement[]
   fileAssets      FileAsset[]
+  leaveRequests   LeaveRequest[] @relation("LeaveRequester")
+  reviewedLeaves  LeaveRequest[] @relation("LeaveReviewer")
 
+  @@index([schoolId, role])
+  @@index([schoolId, email])
   @@index([role])
   @@index([status])
   @@index([deletedAt])
   @@map("users")
 }
 
+model LeaveRequest {
+  id           String             @id @default(auto()) @map("_id") @db.ObjectId
+  schoolId     String?            @db.ObjectId
+  requesterId  String             @db.ObjectId
+  type         LeaveRequestType
+  startDate    DateTime
+  endDate      DateTime
+  reason       String
+  status       LeaveRequestStatus @default(PENDING)
+  reviewNotes  String?
+  reviewedById String?            @db.ObjectId
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  requester    User               @relation("LeaveRequester", fields: [requesterId], references: [id])
+  reviewedBy   User?              @relation("LeaveReviewer", fields: [reviewedById], references: [id])
+
+  @@index([schoolId, requesterId, status])
+  @@index([schoolId, status, startDate])
+  @@index([requesterId, status])
+  @@index([status, startDate])
+  @@map("leave_requests")
+}
+
 model Session {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  schoolId     String?  @db.ObjectId
   userId       String   @db.ObjectId
   refreshToken String   @unique
   deviceInfo   String?
@@ -250,12 +351,14 @@ model Session {
 
   user         User     @relation(fields: [userId], references: [id])
 
+  @@index([schoolId, userId])
   @@index([userId])
   @@map("sessions")
 }
 
 model StudentProfile {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  schoolId        String?  @db.ObjectId
   userId          String   @unique @db.ObjectId
   studentCode     String   @unique
   dateOfBirth     DateTime?
@@ -278,10 +381,93 @@ model StudentProfile {
   results         Result[]
   reportCards     ReportCard[]
   fees            Fee[]
+  documents       StudentDocument[]
 
+  @@index([schoolId, classId])
+  @@index([schoolId, parentIds])
   @@index([classId])
   @@index([parentIds])
   @@map("student_profiles")
+}
+
+model StudentDocument {
+  id           String                @id @default(auto()) @map("_id") @db.ObjectId
+  schoolId     String?               @db.ObjectId
+  studentId    String                @db.ObjectId
+  title        String
+  category     String
+  fileUrl      String
+  filePublicId String
+  fileName     String
+  fileType     String
+  fileSize     Int
+  expiresAt    DateTime?
+  status       StudentDocumentStatus @default(PENDING)
+  reviewNotes  String?
+  reviewedById String?               @db.ObjectId
+  reviewedAt   DateTime?
+  uploadedById String                @db.ObjectId
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  student      StudentProfile        @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId, studentId, status])
+  @@index([schoolId, expiresAt])
+  @@index([studentId, status])
+  @@index([expiresAt])
+  @@map("student_documents")
+}
+
+model AdmissionApplication {
+  id                 String          @id @default(auto()) @map("_id") @db.ObjectId
+  schoolId           String?         @db.ObjectId
+  applicationNumber  String          @unique
+  firstName          String
+  lastName           String
+  email              String
+  phone              String?
+  dateOfBirth        DateTime?
+  gender             Gender?
+  address            String?
+  desiredClassId     String?         @db.ObjectId
+  academicYear       String
+  previousSchool     String?
+  documents          Json?
+  status             AdmissionStatus @default(SUBMITTED)
+  reviewNotes        String?
+  reviewedById       String?         @db.ObjectId
+  reviewedAt         DateTime?
+  convertedStudentId String?         @unique @db.ObjectId
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([academicYear])
+  @@index([desiredClassId])
+  @@map("admission_applications")
+}
+
+model AcademicCalendarEvent {
+  id           String                   @id @default(auto()) @map("_id") @db.ObjectId
+  title        String
+  description  String?
+  type         AcademicCalendarEventType
+  academicYear String
+  startDate    DateTime
+  endDate      DateTime
+  classId      String?                  @db.ObjectId
+  isPublished  Boolean                  @default(false)
+  createdById  String                   @db.ObjectId
+  updatedById  String?                  @db.ObjectId
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([academicYear, startDate])
+  @@index([type, startDate])
+  @@index([classId, startDate])
+  @@map("academic_calendar_events")
 }
 
 model TeacherProfile {
@@ -406,7 +592,7 @@ model Attendance {
   subject         Subject?         @relation(fields: [subjectId], references: [id])
   markedBy        TeacherProfile   @relation("MarkedByTeacher", fields: [markedById], references: [id])
 
-  @@unique([studentId, classId, date])
+  @@unique([studentId, classId, subjectId, date])
   @@index([studentId])
   @@index([classId])
   @@index([date])
@@ -551,6 +737,8 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 
@@ -715,6 +903,8 @@ model FeeInvoice {
   @@index([academicYear])
   @@index([status])
   @@index([dueDate])
+  @@index([studentId, status])
+  @@index([classId, status])
   @@map("fee_invoices")
 }
 
@@ -743,6 +933,7 @@ model PaymentAttempt {
   @@index([studentId])
   @@index([userId])
   @@index([status])
+  @@index([status, createdAt])
   @@map("payment_attempts")
 }
 
@@ -829,6 +1020,26 @@ model Refund {
   @@map("fee_refunds")
 }
 
+model PaymentLedger {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  entryType     String // PAYMENT or REFUND
+  invoiceId     String   @db.ObjectId
+  studentId     String   @db.ObjectId
+  amount        Float
+  currency      String   @default("INR")
+  referenceId   String?
+  referenceType String?
+  balanceAfter  Float
+  actorId       String   @db.ObjectId
+  createdAt     DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([studentId])
+  @@index([invoiceId, entryType])
+  @@index([invoiceId, createdAt])
+  @@map("payment_ledger")
+}
+
 model AuditLog {
   id          String      @id @default(auto()) @map("_id") @db.ObjectId
   actorId     String      @db.ObjectId
@@ -846,6 +1057,8 @@ model AuditLog {
   @@index([action])
   @@index([entity])
   @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 

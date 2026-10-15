@@ -27,20 +27,40 @@ function createNoopQueue(name: string): AppQueue {
 }
 
 function createQueue(name: string): AppQueue {
-  return config.ENABLE_QUEUES
-    ? new Queue(name, { connection })
-    : createNoopQueue(name);
+  if (!config.ENABLE_QUEUES) return createNoopQueue(name);
+  const queue = new Queue(name, {
+    connection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { count: 200, age: 24 * 3600 },
+      removeOnFail: { count: 200, age: 7 * 24 * 3600 },
+    },
+  });
+  return {
+    name,
+    async add(jobName: string, data?: unknown, opts?: JobsOptions) {
+      try {
+        return await queue.add(jobName, data, opts);
+      } catch (error) {
+        logger.error(`[Queue:${name}] Failed to enqueue "${jobName}":`, error);
+        return null;
+      }
+    },
+    async close() {
+      await queue.close();
+    },
+  };
 }
 
 // Queues
 export const reportCardQueue = createQueue('reportCard');
 export const notificationQueue = createQueue('notification');
 export const analyticsQueue = createQueue('analytics');
-export const emailQueue = createQueue('email');
 export const paymentReconciliationQueue = createQueue('paymentReconciliation');
 
 // Queue Events (for logging)
-const queues = [reportCardQueue, notificationQueue, analyticsQueue, emailQueue, paymentReconciliationQueue];
+const queues = [reportCardQueue, notificationQueue, analyticsQueue, paymentReconciliationQueue];
 const queueEvents: QueueEvents[] = [];
 
 if (config.ENABLE_QUEUES) {
@@ -52,6 +72,9 @@ if (config.ENABLE_QUEUES) {
     );
     events.on('failed', ({ jobId, failedReason }) =>
       logger.error(`[Queue:${queue.name}] Job ${jobId} failed: ${failedReason}`)
+    );
+    events.on('error', (error) =>
+      logger.error(`[Queue:${queue.name}] Queue events error:`, error)
     );
   });
 } else {
@@ -67,9 +90,14 @@ export function createWorker(
     return null;
   }
 
-  const worker = new Worker(queueName, processor, { connection });
-  worker.on('error', (err) => logger.error(`Worker error [${queueName}]:`, err));
-  return worker;
+  try {
+    const worker = new Worker(queueName, processor, { connection });
+    worker.on('error', (err) => logger.error(`Worker error [${queueName}]:`, err));
+    return worker;
+  } catch (error) {
+    logger.error(`Worker [${queueName}] could not start:`, error);
+    return null;
+  }
 }
 
 export async function closeQueues(): Promise<void> {

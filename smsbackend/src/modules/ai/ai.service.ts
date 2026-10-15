@@ -12,6 +12,7 @@ import {
 import prisma from '../../config/database';
 import { AppError } from '../../utils/AppError';
 import { getAttendanceSummary } from '../../utils/attendance';
+import { calculateRiskScore } from '../../utils/riskScore';
 import logger from '../../utils/logger';
 import config from '../../config/env';
 
@@ -28,9 +29,16 @@ class AIService {
 
   private async complete(prompt: string): Promise<string> {
     if (!this.provider.isAvailable()) {
-      throw AppError.internal('AI provider not configured. Set API key in environment variables.');
+      throw AppError.serviceUnavailable('AI assistance is not enabled or the selected provider is not configured.');
     }
-    return this.provider.complete(prompt, SYSTEM_PROMPT);
+
+    try {
+      return await this.provider.complete(prompt, SYSTEM_PROMPT);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      logger.error('AI provider request failed:', error);
+      throw AppError.serviceUnavailable('AI assistance is temporarily unavailable. Please try again later.');
+    }
   }
 
   async generateStudentSummary(studentId: string, requesterId: string, requesterRole: string) {
@@ -173,14 +181,12 @@ class AIService {
     });
     if (!student) throw AppError.notFound('Student not found');
 
-    const { calculateRiskScore } = await import('../../utils/riskScore');
     const [attendances, results, submissions] = await Promise.all([
       prisma.attendance.findMany({ where: { studentId }, select: { status: true } }),
       prisma.result.findMany({ where: { studentId, isPublished: true }, select: { percentage: true } }),
       prisma.assignmentSubmission.findMany({ where: { studentId }, select: { status: true, isLate: true } }),
     ]);
 
-    const { getAttendanceSummary } = await import('../../utils/attendance');
     const attendanceSummary = getAttendanceSummary(attendances);
     const avgMarks = results.length ? results.reduce((s, r) => s + r.percentage, 0) / results.length : 0;
     const missing = submissions.filter((s) => s.status === 'MISSING').length;

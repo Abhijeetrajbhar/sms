@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ── Application ─────────────────────────────────────────────────────────────
   api:
@@ -11,14 +9,18 @@ services:
     ports:
       - '5000:5000'
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 5000
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
+      ENABLE_QUEUES: ${ENABLE_QUEUES:-true}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
+      REFRESH_COOKIE_MAX_AGE_MS: ${REFRESH_COOKIE_MAX_AGE_MS:-604800000}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
@@ -30,13 +32,24 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       AI_PROVIDER: ${AI_PROVIDER:-gemini}
-      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+      AI_ENABLED: ${AI_ENABLED:-false}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      STUDENT_ONLINE_PAYMENTS_ENABLED: ${STUDENT_ONLINE_PAYMENTS_ENABLED:-false}
+      OFFLINE_PAYMENT_APPROVAL_REQUIRED: ${OFFLINE_PAYMENT_APPROVAL_REQUIRED:-false}
+      PAYMENT_ORDER_TTL_MINUTES: ${PAYMENT_ORDER_TTL_MINUTES:-15}
+      PAYMENT_RATE_LIMIT_MAX: ${PAYMENT_RATE_LIMIT_MAX:-20}
+      PAYMENT_RECONCILIATION_INTERVAL_MS: ${PAYMENT_RECONCILIATION_INTERVAL_MS:-300000}
+      SCHOOL_NAME: ${SCHOOL_NAME:-CampusOryx School}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
       BCRYPT_ROUNDS: 12
     depends_on:
       redis:
         condition: service_healthy
     volumes:
-      - ./logs:/app/logs
+      - api_logs:/app/logs
     restart: unless-stopped
     networks:
       - edumanage-network
@@ -82,6 +95,8 @@ services:
 
 volumes:
   redis_data:
+    driver: local
+  api_logs:
     driver: local
 
 networks:

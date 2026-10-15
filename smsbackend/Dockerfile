@@ -20,6 +20,9 @@ COPY src ./src
 # Build TypeScript
 RUN npm run build
 
+# Keep the generated Prisma client while removing build-only packages.
+RUN npm prune --omit=dev
+
 # ── Production Stage ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS production
 
@@ -32,8 +35,8 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install production dependencies only
-RUN npm ci --only=production && npx prisma generate
+# Reuse the generated, production-only dependency tree from the builder.
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist

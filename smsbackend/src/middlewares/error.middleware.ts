@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { RequestWithContext } from './requestContext.middleware';
 import { AppError } from '../utils/AppError';
 import logger from '../utils/logger';
 
@@ -9,10 +10,11 @@ function handlePrismaError(error: {
   meta?: { target?: string[] };
 }): AppError {
   switch (error.code) {
-    case 'P2002':
+    case 'P2002': {
       // Unique constraint violation
       const field = error.meta?.target?.join(', ') || 'field';
       return AppError.conflict(`A record with this ${field} already exists`);
+    }
 
     case 'P2025':
       // Record not found
@@ -33,7 +35,7 @@ function handlePrismaError(error: {
 
 export function errorMiddleware(
   error: Error,
-  req: Request,
+  req: RequestWithContext,
   res: Response,
   _next: NextFunction
 ): void {
@@ -64,14 +66,17 @@ export function errorMiddleware(
       stack: error.stack,
       url: req.url,
       method: req.method,
+      requestId: req.requestId,
     });
   }
 
   // Log operational errors in development
   if (process.env.NODE_ENV === 'development') {
-    logger.error(`[${req.method}] ${req.url}`, {
+    const log = appError.statusCode >= 500 ? logger.error.bind(logger) : logger.warn.bind(logger);
+    log(`[${req.method}] ${req.url}`, {
       statusCode: appError.statusCode,
       message: appError.message,
+      requestId: req.requestId,
     });
   }
 
@@ -84,6 +89,7 @@ export function errorMiddleware(
     ...(process.env.NODE_ENV === 'development' && {
       stack: appError.stack,
     }),
+    requestId: req.requestId,
   });
 }
 

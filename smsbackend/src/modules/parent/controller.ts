@@ -12,6 +12,16 @@ export const createProfile = asyncHandler(async (req: AuthenticatedRequest, res:
   ApiResponse.created(res, { message: 'Parent profile created', data: profile });
 });
 
+export const onboardParent = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await service.onboardParent(req.body, req.user!.id, req);
+  ApiResponse.created(res, {
+    message: result.credentialDelivery === 'TEMP_PASSWORD'
+      ? 'Parent onboarded successfully with temporary credentials'
+      : 'Parent onboarded and invitation dispatched',
+    data: result,
+  });
+});
+
 export const getParents = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await service.getParents(req);
   ApiResponse.success(res, result);

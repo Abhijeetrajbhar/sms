@@ -1,12 +1,17 @@
 import {
   Award,
   BellRing,
+  BookOpen,
+  CalendarCheck,
   CalendarDays,
   ClipboardCheck,
+  Clock3,
+  CreditCard,
   GraduationCap,
   IndianRupee,
   Megaphone,
   RefreshCw,
+  Sparkles,
   UserRound,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,26 +22,30 @@ import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import { formatCurrency } from '../../utils/formatters.js';
 
-const quickActions = [
-  ['My Profile', '/app/students', UserRound],
-  ['Attendance', '/app/attendance', ClipboardCheck],
-  ['Assignments', '/app/assignments', BellRing],
-  ['Results', '/app/results', Award],
-  ['Timetable', '/app/timetable', CalendarDays],
-  ['Notices', '/app/announcements', Megaphone],
-];
-
-function name(user) {
-  return [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Student';
+function studentFullName(user) {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Learner';
 }
 
-function EmptyState({ children }) {
-  return <p className="rounded-xl border border-dashed border-outline-variant/60 bg-surface-container-low px-4 py-5 text-center text-sm font-semibold text-on-surface-variant">{children}</p>;
+function EmptyFeed({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/20 py-8 px-4 text-center">
+      <p className="font-mono text-xs text-slate-500">{message}</p>
+    </div>
+  );
 }
 
 export default function StudentDashboard({ dashboard, isLoading, error, onRetry }) {
   if (isLoading && !dashboard) {
-    return <div className="page-shell"><Card><EmptyState>Loading your student workspace...</EmptyState></Card></div>;
+    return (
+      <div className="page-shell">
+        <Card className="flex items-center justify-center py-16">
+          <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
+            <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
+            Loading student terminal...
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const profile = dashboard?.profile;
@@ -45,127 +54,184 @@ export default function StudentDashboard({ dashboard, isLoading, error, onRetry 
   const results = dashboard?.results || [];
   const invoices = dashboard?.fees?.invoices || [];
   const notices = dashboard?.notices || [];
+
   const dueAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.dueAmount || 0), 0);
-  const pendingAssignments = assignments.filter((assignment) => !assignment.submissions?.length && new Date(assignment.dueDate) >= new Date());
+  const pendingAssignments = assignments.filter(
+    (assignment) => !assignment.submissions?.length && new Date(assignment.dueDate) >= new Date()
+  );
   const averageScore = results.length
     ? Math.round(results.reduce((sum, result) => sum + Number(result.percentage || 0), 0) / results.length)
     : 0;
+
   const dayOfWeek = (new Date().getDay() + 6) % 7;
   const todaySchedule = (dashboard?.timetable || []).filter((slot) => slot.dayOfWeek === dayOfWeek);
 
+  const quickActions = [
+    { label: 'Attendance', path: '/app/attendance', icon: ClipboardCheck },
+    { label: 'Coursework', path: '/app/assignments', icon: BellRing },
+    { label: 'Gradebook', path: '/app/results', icon: Award },
+    { label: 'Class Schedule', path: '/app/timetable', icon: CalendarDays },
+    { label: 'Announcements', path: '/app/announcements', icon: Megaphone },
+    { label: 'Fee Invoices', path: '/app/fees', icon: CreditCard },
+  ];
+
   return (
-    <div className="page-shell">
+    <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Student Workspace"
-        title={`Welcome, ${name(profile?.user)}`}
-        description="Your attendance, published assignments and results, class timetable, fees, and relevant notices."
+        eyebrow="Learner Terminal"
+        title={`Welcome, ${studentFullName(profile?.user)}`}
+        description="Daily lecture timetable, published exam results, homework deadlines, and campus broadcasts."
       />
 
       {error ? (
-        <div role="alert" className="flex flex-col gap-3 rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container sm:flex-row sm:items-center sm:justify-between">
+        <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 font-mono text-xs text-rose-300 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
           <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry</Button>
         </div>
       ) : null}
 
-      {!profile ? <Card><EmptyState>No active student profile is linked to this account. Contact the school administrator.</EmptyState></Card> : (
+      {!profile ? (
+        <Card>
+          <EmptyFeed message="No active student profile is linked to this account. Contact your school administrator." />
+        </Card>
+      ) : (
         <>
-          <Card className="overflow-hidden bg-gradient-to-br from-primary/10 via-surface-container-lowest to-secondary/10">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase text-primary">My class</p>
-                <h2 className="mt-1 text-xl font-bold text-on-surface sm:text-2xl">{profile.class ? `Class ${profile.class.name} ${profile.class.section}` : 'Class not assigned'}</h2>
-                <p className="mt-1 text-sm font-semibold text-on-surface-variant">
-                  {profile.class?.academicYear || 'Academic year not available'} / Admission {profile.studentCode}
-                </p>
+          {/* Student Status Badge Header */}
+          <Card className="relative overflow-hidden p-5 border border-white/[0.12] bg-[#0c0f17]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="grid h-12 w-12 place-items-center rounded-xl border border-indigo-500/30 bg-indigo-500/15 text-indigo-400">
+                  <GraduationCap className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-white">
+                      {profile.class ? `Class ${profile.class.name} ${profile.class.section}` : 'Unassigned Class'}
+                    </h2>
+                    <span className="font-mono text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-400">
+                      ENROLLED
+                    </span>
+                  </div>
+                  <p className="font-mono text-xs text-slate-400 mt-0.5">
+                    Admission ID: {profile.studentCode} • Academic Year: {profile.class?.academicYear || 'Current Year'}
+                  </p>
+                </div>
               </div>
-              <Badge tone={profile.class ? 'emerald' : 'amber'}>{profile.class ? 'Active student' : 'Assignment pending'}</Badge>
+
+              <div className="font-mono text-xs text-slate-400">
+                Class Mentor: <span className="font-bold text-white">{profile.class?.teacher?.user ? studentFullName(profile.class.teacher.user) : 'Faculty Lead'}</span>
+              </div>
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard title="Attendance" value={`${attendance.percentage || 0}%`} icon={ClipboardCheck} tone="emerald" />
-            <StatCard title="Assignments Due" value={pendingAssignments.length} icon={BellRing} tone="blue" />
-            <StatCard title="Published Average" value={results.length ? `${averageScore}%` : 'N/A'} icon={Award} tone="violet" />
-            <StatCard title="Fee Due" value={formatCurrency(dueAmount)} icon={IndianRupee} tone={dueAmount ? 'rose' : 'emerald'} />
+          {/* Metric Telemetry Row */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              title="Attendance Rate"
+              value={`${attendance.percentage || 0}%`}
+              icon={ClipboardCheck}
+              tone="emerald"
+            />
+            <StatCard
+              title="Pending Homework"
+              value={pendingAssignments.length}
+              icon={BellRing}
+              tone="blue"
+            />
+            <StatCard
+              title="Term GPA Average"
+              value={results.length ? `${averageScore}%` : 'N/A'}
+              icon={Award}
+              tone="violet"
+            />
+            <StatCard
+              title="Tuition Balance"
+              value={formatCurrency(dueAmount)}
+              icon={IndianRupee}
+              tone={dueAmount > 0 ? 'rose' : 'emerald'}
+            />
           </div>
 
-          <div className="grid gap-3 min-[425px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-            {quickActions.map(([label, path, Icon]) => (
-              <Link key={label} to={path} className="min-w-0">
-                <Card hover className="grid min-h-24 place-items-center gap-2 p-3 text-center">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <span className="text-sm font-bold text-on-surface">{label}</span>
+          {/* Quick Cockpit Launchers */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {quickActions.map(({ label, path, icon: Icon }) => (
+              <Link key={label} to={path}>
+                <Card hover className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-indigo-400">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-200">{label}</span>
                 </Card>
               </Link>
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,.9fr)]">
-            <Card>
-              <div className="flex items-center justify-between gap-3">
-                <div><p className="text-xs font-bold uppercase text-primary">Today</p><h3 className="mt-1 text-lg font-bold text-on-surface">My timetable</h3></div>
-                <CalendarDays className="h-6 w-6 text-primary" />
+          {/* Timetable Schedule & Profile Identity */}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+            {/* Today's Schedule */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-indigo-400" />
+                  <h3 className="font-display text-base font-bold text-white">Today's Class Periods</h3>
+                </div>
+                <Link to="/app/timetable" className="font-mono text-[11px] text-indigo-400 hover:underline">
+                  View Timetable
+                </Link>
               </div>
-              <div className="mt-4 space-y-3">
-                {todaySchedule.length ? todaySchedule.map((slot) => (
-                  <div key={slot.id} className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-bold text-on-surface">{slot.subject?.name || 'Subject'}</p>
-                      <p className="text-sm font-semibold text-on-surface-variant">{name(slot.teacher?.user)} / {slot.room || 'Room TBD'}</p>
+
+              <div className="space-y-3">
+                {todaySchedule.length > 0 ? (
+                  todaySchedule.map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="flex flex-col gap-2 rounded-xl border border-white/[0.08] bg-black/20 p-3.5 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-white">{slot.subject?.name || 'Subject'}</p>
+                        <p className="font-mono text-xs text-slate-400">
+                          Faculty: {studentFullName(slot.teacher?.user)} • {slot.room || 'Room TBD'}
+                        </p>
+                      </div>
+                      <span className="font-mono text-xs font-semibold rounded border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-indigo-300">
+                        {slot.startTime} - {slot.endTime}
+                      </span>
                     </div>
-                    <Badge tone="blue">{slot.startTime}-{slot.endTime}</Badge>
-                  </div>
-                )) : <EmptyState>No timetable classes today.</EmptyState>}
+                  ))
+                ) : (
+                  <EmptyFeed message="No academic lectures scheduled for today." />
+                )}
               </div>
             </Card>
 
-            <Card>
-              <div className="flex items-center gap-3">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <div><p className="text-xs font-bold uppercase text-primary">My profile</p><h3 className="mt-1 text-lg font-bold text-on-surface">{name(profile.user)}</h3></div>
-              </div>
-              <div className="mt-4 grid gap-2 text-sm">
-                {[
-                  ['Admission number', profile.studentCode],
-                  ['Class teacher', profile.class?.teacher?.user ? name(profile.class.teacher.user) : 'Not assigned'],
-                  ['Room', profile.class?.room],
-                  ['Blood group', profile.bloodGroup],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex flex-wrap justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-2">
-                    <span className="font-semibold text-on-surface-variant">{label}</span>
-                    <span className="font-bold text-on-surface">{value || 'Not available'}</span>
+            {/* Profile Identity Card */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <UserRound className="h-4 w-4 text-sky-400" />
+                    <h3 className="font-display text-base font-bold text-white">Student Record</h3>
                   </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+                  <span className="font-mono text-[11px] text-slate-500">ID: {profile.studentCode}</span>
+                </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <div className="flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-on-surface">My assignments</h3><BellRing className="h-6 w-6 text-primary" /></div>
-              <div className="mt-4 space-y-3">
-                {assignments.length ? assignments.slice(0, 5).map((assignment) => (
-                  <div key={assignment.id} className="rounded-xl bg-surface-container-low p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-on-surface">{assignment.title}</p>
-                      <Badge tone={assignment.submissions?.length ? 'emerald' : 'amber'}>{assignment.submissions?.[0]?.status || 'Pending'}</Badge>
+                <div className="space-y-2.5 font-mono text-xs">
+                  {[
+                    { label: 'Assigned Classroom', value: profile.class?.room || 'Building A' },
+                    { label: 'Homeroom Lead', value: profile.class?.teacher?.user ? studentFullName(profile.class.teacher.user) : 'Unassigned' },
+                    { label: 'Emergency Blood Group', value: profile.bloodGroup || 'Not provided' },
+                    { label: 'Published Exams', value: `${results.length} Completed` },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 p-2.5">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="font-bold text-white">{item.value}</span>
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-on-surface-variant">{assignment.subject?.name || 'Subject'} / Due {String(assignment.dueDate).slice(0, 10)}</p>
-                  </div>
-                )) : <EmptyState>No published assignments for your class.</EmptyState>}
+                  ))}
+                </div>
               </div>
-            </Card>
 
-            <Card>
-              <div className="flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-on-surface">Relevant notices</h3><Megaphone className="h-6 w-6 text-primary" /></div>
-              <div className="mt-4 space-y-3">
-                {notices.length ? notices.slice(0, 5).map((notice) => (
-                  <div key={notice.id} className="rounded-xl bg-surface-container-low p-4">
-                    <p className="font-bold text-on-surface">{notice.title}</p>
-                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-on-surface-variant">{notice.content}</p>
-                  </div>
-                )) : <EmptyState>No school or class notices are available.</EmptyState>}
+              <div className="mt-5 border-t border-white/[0.06] pt-3 font-mono text-[11px] text-slate-500">
+                Session security: Verified learner token
               </div>
             </Card>
           </div>

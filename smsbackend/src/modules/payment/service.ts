@@ -5,6 +5,7 @@ import {
   PaymentAttemptStatus,
   NotificationType,
   Prisma,
+  Role,
   WebhookProcessStatus,
 } from '@prisma/client';
 import prisma from '../../config/database';
@@ -18,6 +19,7 @@ import { assertInvoiceAccess, getInvoiceScope } from './access';
 import { GatewayPayment, paymentGateway, sha256 } from './gateway';
 import { assertParentStudentAccess } from '../parent/access';
 import { NotificationService } from '../notification/service';
+import { cacheDelPattern } from '../../config/redis';
 
 const ACTIVE_STATUSES: PaymentAttemptStatus[] = [
   PaymentAttemptStatus.CREATED,
@@ -50,8 +52,11 @@ export class PaymentService {
     if (!student || student.deletedAt || student.user.deletedAt || ['INACTIVE', 'SUSPENDED'].includes(student.user.status)) {
       throw AppError.unprocessable('Online payment is unavailable for an inactive student');
     }
-    if (user.role === 'STUDENT' && !config.STUDENT_ONLINE_PAYMENTS_ENABLED) {
-      throw AppError.forbidden('Student online payments are disabled for this school');
+    if ((user.role === Role.STUDENT || user.role === Role.PARENT) && !config.STUDENT_ONLINE_PAYMENTS_ENABLED) {
+      throw AppError.forbidden('Online fee payments are disabled for the student/parent portal');
+    }
+    if (!paymentGateway.isConfigured()) {
+      throw AppError.badRequest('Online payments are not configured for this school');
     }
     const terminalStatuses: InvoiceStatus[] = [
       InvoiceStatus.PAID,
@@ -68,6 +73,9 @@ export class PaymentService {
     if (existingByKey) {
       if (existingByKey.userId !== user.id || existingByKey.invoiceId !== invoice.id) {
         throw AppError.conflict('Idempotency key is already in use');
+      }
+      if (!existingByKey.gatewayOrderId || existingByKey.status === PaymentAttemptStatus.FAILED) {
+        throw AppError.conflict('The previous payment order request failed. Please retry with a new request.');
       }
       return this.orderResponse(existingByKey);
     }
@@ -145,11 +153,23 @@ export class PaymentService {
     if (!paymentGateway.verifyCheckoutSignature(data.razorpay_order_id, data.razorpay_payment_id, data.razorpay_signature)) {
       throw AppError.badRequest('Invalid payment signature');
     }
-    const payment = await paymentGateway.getPayment(data.razorpay_payment_id);
+    let payment = await paymentGateway.getPayment(data.razorpay_payment_id);
     if (payment.order_id !== attempt.gatewayOrderId) throw AppError.badRequest('Payment order mismatch');
-    if (payment.status === 'captured') {
-      return this.processCapturedPayment(attempt.id, payment);
+
+    if (payment.status === 'authorized') {
+      try {
+        payment = await paymentGateway.capturePayment(data.razorpay_payment_id, amountPaise(attempt.amount), attempt.currency);
+      } catch {
+        // Continue if capture is already processed or awaiting webhook
+      }
     }
+
+    if (payment.status === 'captured') {
+      const receipt = await this.processCapturedPayment(attempt.id, payment);
+      await cacheDelPattern('analytics:*').catch(() => undefined);
+      return receipt;
+    }
+
     await prisma.paymentAttempt.update({
       where: { id: attempt.id },
       data: {
@@ -252,8 +272,20 @@ export class PaymentService {
     }
     const payload = JSON.parse(rawBody.toString('utf8')) as {
       event?: string;
+      created_at?: number;
       payload?: { payment?: { entity?: GatewayPayment }; refund?: { entity?: { id?: string } } };
     };
+
+    // Replay protection: reject events that are too old or arrive from the future
+    const WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
+    if (typeof payload.created_at === 'number') {
+      const eventTimeMs = payload.created_at * 1000;
+      const ageMs = Date.now() - eventTimeMs;
+      if (ageMs > WEBHOOK_MAX_AGE_MS || ageMs < -WEBHOOK_MAX_AGE_MS) {
+        throw AppError.unauthorized('Webhook event timestamp is outside the allowed window (possible replay)');
+      }
+    }
+
     const payment = payload.payload?.payment?.entity;
     const eventId = headerEventId || `${payload.event || 'unknown'}:${payment?.id || sha256(rawBody)}`;
 
@@ -266,7 +298,18 @@ export class PaymentService {
         },
       });
     } catch {
-      return { duplicate: true };
+      const existing = await prisma.paymentWebhookEvent.findUnique({ where: { eventId } });
+      if (existing?.processedStatus !== WebhookProcessStatus.FAILED) {
+        return { duplicate: true };
+      }
+      await prisma.paymentWebhookEvent.update({
+        where: { eventId },
+        data: {
+          processedStatus: WebhookProcessStatus.RECEIVED,
+          errorMessage: null,
+          rawPayloadHash: sha256(rawBody),
+        },
+      });
     }
 
     try {
@@ -341,6 +384,21 @@ export class PaymentService {
         },
       });
     });
+
+    // Immutable journal entry for the captured payment (append-only)
+    await prisma.paymentLedger.create({
+      data: {
+        entryType: 'PAYMENT',
+        invoiceId: result.invoiceId,
+        studentId: result.studentId,
+        amount: result.amount,
+        currency: 'INR',
+        referenceId: result.id,
+        referenceType: 'Receipt',
+        balanceAfter: (await prisma.feeInvoice.findUnique({ where: { id: result.invoiceId } }))?.paidAmount ?? 0,
+        actorId: attempt.userId,
+      },
+    });
     await auditLog({ actorId: attempt.userId, action: AuditAction.PAYMENT_VERIFIED, entity: 'PaymentAttempt', entityId: attempt.id, metadata: { receiptId: result.id } });
     await auditLog({ actorId: attempt.userId, action: AuditAction.RECEIPT_ISSUED, entity: 'Receipt', entityId: result.id });
     await notificationService.createNotification({
@@ -350,6 +408,7 @@ export class PaymentService {
       message: `Payment of INR ${attempt.amount.toFixed(2)} was verified. Receipt ${result.receiptNumber} is available.`,
       metadata: { invoiceId: attempt.invoiceId, receiptId: result.id },
     }).catch(() => undefined);
+    await cacheDelPattern('analytics:*').catch(() => undefined);
     return result;
   }
 

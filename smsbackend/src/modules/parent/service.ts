@@ -7,7 +7,10 @@ import { Request } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { getAttendanceSummary } from '../../utils/attendance';
 import { assertParentStudentAccess, getParentScope } from './access';
-import { AnnouncementTarget } from '@prisma/client';
+import { AnnouncementTarget, AuditAction, Role, UserStatus } from '@prisma/client';
+import { auditLog } from '../auditLog/service';
+import { hashPassword, generateRandomToken, hashToken } from '../../utils/password';
+import { sendAccountInvitationEmail, buildAccountActivationUrl } from '../../utils/email';
 
 export class ParentService {
   async createProfile(data: {
@@ -17,8 +20,11 @@ export class ParentService {
     emergencyContact?: string;
   }) {
     const user = await prisma.user.findUnique({ where: { id: data.userId } });
-    if (!user) throw AppError.notFound('User not found');
+    if (!user || user.deletedAt) throw AppError.notFound('User not found');
     if (user.role !== 'PARENT') throw AppError.badRequest('User is not a parent');
+    if (user.status === 'INACTIVE' || user.status === 'SUSPENDED') {
+      throw AppError.unprocessable('Parent profile requires an active or pending parent account');
+    }
 
     const existing = await prisma.parentProfile.findUnique({ where: { userId: data.userId } });
     if (existing) throw AppError.conflict('Parent profile already exists');
@@ -27,6 +33,115 @@ export class ParentService {
       data,
       include: { user: { select: { firstName: true, lastName: true, email: true } } },
     });
+  }
+
+  async onboardParent(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    relation?: string;
+    occupation?: string;
+    emergencyContact?: string;
+    studentId?: string;
+    credentialDelivery?: 'EMAIL_INVITE' | 'TEMP_PASSWORD';
+    temporaryPassword?: string;
+  }, actorId: string, req?: Request) {
+    if (!data.firstName?.trim() || !data.lastName?.trim() || !data.email?.trim()) {
+      throw AppError.badRequest('First name, last name, and email are required');
+    }
+
+    const email = data.email.toLowerCase().trim();
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw AppError.conflict('Email already registered');
+
+    if (data.studentId) {
+      const student = await prisma.studentProfile.findUnique({ where: { id: data.studentId } });
+      if (!student || student.deletedAt) throw AppError.notFound('Selected student not found');
+    }
+
+    const isTempPassword = data.credentialDelivery === 'TEMP_PASSWORD';
+    let rawPassword = '';
+    let invitationToken: string | null = null;
+    let invitationExpires: Date | null = null;
+
+    if (isTempPassword) {
+      rawPassword = data.temporaryPassword?.trim() || `Parent#${Math.floor(1000 + Math.random() * 9000)}`;
+    } else {
+      rawPassword = generateRandomToken();
+      invitationToken = generateRandomToken();
+      invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    }
+
+    const hashedPassword = await hashPassword(rawPassword);
+
+    const { user, profile } = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          phone: data.phone?.trim() || undefined,
+          role: Role.PARENT,
+          status: isTempPassword ? UserStatus.ACTIVE : UserStatus.PENDING_VERIFICATION,
+          isEmailVerified: isTempPassword,
+          emailVerifyToken: invitationToken ? hashToken(invitationToken) : null,
+          emailVerifyExpires: invitationExpires,
+          passwordResetToken: isTempPassword ? 'MUST_CHANGE_PASSWORD' : null,
+        },
+      });
+
+      const newProfile = await tx.parentProfile.create({
+        data: {
+          userId: newUser.id,
+          relation: data.relation?.trim() || undefined,
+          occupation: data.occupation?.trim() || undefined,
+          emergencyContact: data.emergencyContact?.trim() || undefined,
+        },
+      });
+
+      if (data.studentId) {
+        await tx.studentProfile.update({
+          where: { id: data.studentId },
+          data: { parentIds: { push: newProfile.id } },
+        });
+      }
+
+      return { user: newUser, profile: newProfile };
+    });
+
+    await auditLog({
+      actorId,
+      action: AuditAction.USER_CREATED,
+      entity: 'ParentOnboarding',
+      entityId: profile.id,
+      metadata: { email, credentialDelivery: data.credentialDelivery || 'EMAIL_INVITE', studentId: data.studentId },
+      ipAddress: req?.ip,
+      userAgent: req?.headers['user-agent'],
+    });
+
+    let invitationDelivered = false;
+    if (invitationToken) {
+      invitationDelivered = await sendAccountInvitationEmail(user.email, invitationToken, user.firstName);
+    }
+
+    return {
+      parent: {
+        id: profile.id,
+        userId: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        relation: profile.relation,
+      },
+      credentialDelivery: isTempPassword ? 'TEMP_PASSWORD' : 'EMAIL_INVITE',
+      invitationDelivered,
+      activationUrl: invitationToken ? buildAccountActivationUrl(invitationToken) : null,
+      temporaryPassword: isTempPassword ? rawPassword : null,
+    };
   }
 
   async getParentById(id: string, user: NonNullable<AuthenticatedRequest['user']>) {
@@ -258,7 +373,7 @@ export class ParentService {
     const [parents, total] = await Promise.all([
       prisma.parentProfile.findMany({
         where,
-        include: { user: { select: { firstName: true, lastName: true, email: true, avatarUrl: true } } },
+        include: { user: { select: { firstName: true, lastName: true, email: true, avatarUrl: true, status: true } } },
         orderBy: { [sortBy]: sortOrder } as never,
         skip,
         take: limit,

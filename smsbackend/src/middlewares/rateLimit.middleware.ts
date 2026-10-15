@@ -12,7 +12,7 @@ export const defaultRateLimit = rateLimit({
     data: null,
     error: { message: 'Too many requests, please try again later.' },
   },
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (_req) => process.env.NODE_ENV === 'test',
 });
 
 export const authRateLimit = rateLimit({
@@ -26,7 +26,7 @@ export const authRateLimit = rateLimit({
     data: null,
     error: { message: 'Too many authentication attempts, please try again in 15 minutes.' },
   },
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (_req) => process.env.NODE_ENV === 'test',
 });
 
 export const aiRateLimit = rateLimit({
@@ -40,7 +40,7 @@ export const aiRateLimit = rateLimit({
     data: null,
     error: { message: 'AI request limit reached. Please try again in an hour.' },
   },
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (_req) => process.env.NODE_ENV === 'test',
 });
 
 export const paymentRateLimit = rateLimit({
@@ -54,7 +54,7 @@ export const paymentRateLimit = rateLimit({
     data: null,
     error: { code: 'PAYMENT_RATE_LIMIT', details: 'Too many payment requests.' },
   },
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (_req) => process.env.NODE_ENV === 'test',
 });
 
 export const paymentWebhookRateLimit = rateLimit({
@@ -68,5 +68,5 @@ export const paymentWebhookRateLimit = rateLimit({
     data: null,
     error: { code: 'WEBHOOK_RATE_LIMIT', details: 'Webhook request limit exceeded.' },
   },
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (_req) => process.env.NODE_ENV === 'test',
 });

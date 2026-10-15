@@ -17,6 +17,8 @@ router.patch('/:id', requireAdminPermission('users:update'), controller.updateUs
 router.patch('/:id/role', requireSuperAdmin, controller.changeRole);
 router.patch('/:id/permissions', requireSuperAdmin, validate(updatePermissionsSchema), controller.updatePermissions);
 router.patch('/:id/status', requireAdminPermission('users:update'), controller.setStatus);
+router.post('/:id/invite', requireAdminPermission('users:update'), controller.inviteUser);
+router.get('/:id/activation-link', requireAdminPermission('users:update'), controller.getActivationLink);
 router.post('/:id/avatar', requireAdminPermission('users:update'), uploadAvatar, controller.uploadAvatar);
 router.delete('/:id', requireAdminPermission('users:delete'), controller.deleteUser);
 router.post('/:id/restore', requireAdminPermission('users:update'), controller.restoreUser);

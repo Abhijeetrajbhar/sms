@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import { useApp } from '../context/AppContext.jsx';
+import MustChangePasswordModal from '../components/auth/MustChangePasswordModal.jsx';
 
 export default function DashboardLayout() {
-  const { sidebarOpen, setSidebarOpen, dataError, isDataLoading, retryData } = useApp();
+  const { sidebarOpen, setSidebarOpen, dataError, isDataLoading, retryData, currentUser } = useApp();
+  const [mustChangePassword, setMustChangePassword] = useState(Boolean(currentUser?.mustChangePassword));
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden bg-background text-on-surface">
-      <div className="fixed inset-0 noise-overlay pointer-events-none opacity-60" />
+      <div className="fixed inset-0 noise-overlay pointer-events-none opacity-25" />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="relative min-w-0 lg:pl-64">
         <Topbar />
@@ -24,6 +27,14 @@ export default function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
+      <MustChangePasswordModal
+        open={mustChangePassword}
+        onPasswordUpdated={() => {
+          setMustChangePassword(false);
+          if (currentUser) currentUser.mustChangePassword = false;
+        }}
+      />
     </div>
   );
 }

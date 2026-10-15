@@ -6,6 +6,7 @@ import { getPaginationOptions } from '../../utils/pagination';
 import { getAttendanceSummary, buildMonthlyHeatmap } from '../../utils/attendance';
 import { auditLog } from '../auditLog/service';
 import { notificationQueue } from '../../config/queue';
+import { cacheDelPattern } from '../../config/redis';
 import { Request } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { assertTeacherClassAccess, assertTeacherSubjectAccess } from '../teacher/access';
@@ -62,6 +63,7 @@ export class AttendanceService {
     const existing = await prisma.attendance.findMany({
       where: {
         classId,
+        subjectId: subjectId ?? null,
         date: attendanceDate,
         studentId: { in: entries.map((e) => e.studentId) },
       },
@@ -79,7 +81,7 @@ export class AttendanceService {
           data: {
             studentId: entry.studentId,
             classId,
-            subjectId,
+            subjectId: subjectId ?? null,
             markedById,
             date: attendanceDate,
             status: entry.status,
@@ -96,6 +98,7 @@ export class AttendanceService {
       entries,
     });
 
+    await cacheDelPattern('analytics:*');
     await auditLog({
       actorId: actorUserId,
       action: AuditAction.ATTENDANCE_MARKED,
@@ -116,9 +119,13 @@ export class AttendanceService {
   ) {
     const existing = await prisma.attendance.findUnique({ where: { id } });
     if (!existing) throw AppError.notFound('Attendance record not found');
-    if (user.role === 'TEACHER') await assertTeacherClassAccess(user, existing.classId);
+    if (user.role === 'TEACHER') {
+      if (existing.subjectId) await assertTeacherSubjectAccess(user, existing.classId, existing.subjectId);
+      else await assertTeacherClassAccess(user, existing.classId);
+    }
 
     const updated = await prisma.attendance.update({ where: { id }, data });
+    await cacheDelPattern('analytics:*');
     await auditLog({
       actorId: user.id,
       action: AuditAction.ATTENDANCE_UPDATED,
@@ -159,15 +166,18 @@ export class AttendanceService {
     return { data: records, meta: buildPaginationMeta(total, page, limit) };
   }
 
-  async getClassAttendance(classId: string, date: string, user: NonNullable<AuthenticatedRequest['user']>) {
-    if (user.role === 'TEACHER') await assertTeacherClassAccess(user, classId);
+  async getClassAttendance(classId: string, date: string, user: NonNullable<AuthenticatedRequest['user']>, subjectId?: string) {
+    if (user.role === 'TEACHER') {
+      if (subjectId) await assertTeacherSubjectAccess(user, classId, subjectId);
+      else await assertTeacherClassAccess(user, classId);
+    }
     const attendanceDate = new Date(date);
     if (Number.isNaN(attendanceDate.getTime())) {
       throw AppError.badRequest('A valid attendance date is required');
     }
     attendanceDate.setUTCHours(0, 0, 0, 0);
     return prisma.attendance.findMany({
-      where: { classId, date: attendanceDate },
+      where: { classId, date: attendanceDate, ...(subjectId ? { subjectId } : {}) },
       include: {
         student: {
           include: {

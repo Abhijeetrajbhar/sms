@@ -1,5 +1,16 @@
-import { PrismaClient, Role, UserStatus, AttendanceStatus, FeeStatus, AnnouncementTarget, AuditAction } from '@prisma/client';
+import {
+  AnnouncementTarget,
+  AuditAction,
+  AttendanceStatus,
+  FeeCycle,
+  InvoiceStatus,
+  OfflinePaymentStatus,
+  PrismaClient,
+  Role,
+  UserStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { ADMIN_PERMISSIONS } from './modules/admin/permissions';
 
 const prisma = new PrismaClient();
 
@@ -9,6 +20,13 @@ async function main() {
   // ── Clean up ────────────────────────────────────────────────────────────────
   await prisma.$transaction([
     prisma.auditLog.deleteMany(),
+    prisma.refund.deleteMany(),
+    prisma.receipt.deleteMany(),
+    prisma.offlinePayment.deleteMany(),
+    prisma.paymentWebhookEvent.deleteMany(),
+    prisma.paymentAttempt.deleteMany(),
+    prisma.feeInvoice.deleteMany(),
+    prisma.feeStructure.deleteMany(),
     prisma.payment.deleteMany(),
     prisma.fee.deleteMany(),
     prisma.assignmentSubmission.deleteMany(),
@@ -29,9 +47,21 @@ async function main() {
     prisma.session.deleteMany(),
     prisma.fileAsset.deleteMany(),
     prisma.user.deleteMany(),
+    prisma.school.deleteMany(),
   ]);
 
   console.log(' Database cleaned');
+
+  const defaultSchool = await prisma.school.create({
+    data: {
+      slug: 'campusoryx-main',
+      name: 'CampusOryx Academy',
+      domain: 'campusoryx.local',
+      timezone: 'Asia/Kolkata',
+      currency: 'INR',
+      status: 'ACTIVE',
+    },
+  });
 
   const hashPwd = (p: string) => bcrypt.hash(p, 10);
 
@@ -40,6 +70,8 @@ async function main() {
     await Promise.all([
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'admin@edumanage.com',
           password: await hashPwd('Admin@123'),
           firstName: 'System',
@@ -47,11 +79,15 @@ async function main() {
           role: Role.ADMIN,
           status: UserStatus.ACTIVE,
           isEmailVerified: true,
+          isSuperAdmin: true,
+          permissions: [...ADMIN_PERMISSIONS],
           phone: '+1-555-0100',
         },
       }),
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'teacher@edumanage.com',
           password: await hashPwd('Teacher@123'),
           firstName: 'Sarah',
@@ -64,6 +100,8 @@ async function main() {
       }),
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'teacher2@edumanage.com',
           password: await hashPwd('Teacher@123'),
           firstName: 'Michael',
@@ -76,6 +114,8 @@ async function main() {
       }),
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'student@edumanage.com',
           password: await hashPwd('Student@123'),
           firstName: 'Alex',
@@ -88,6 +128,8 @@ async function main() {
       }),
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'student2@edumanage.com',
           password: await hashPwd('Student@123'),
           firstName: 'Emily',
@@ -100,6 +142,8 @@ async function main() {
       }),
       prisma.user.create({
         data: {
+          schoolId: defaultSchool.id,
+          deletedAt: null,
           email: 'parent@edumanage.com',
           password: await hashPwd('Parent@123'),
           firstName: 'Robert',
@@ -426,63 +470,91 @@ async function main() {
   console.log('Results created');
 
   // ── Fees ──────────────────────────────────────────────────────────────────────
-  const tuitionFee = await prisma.fee.create({
+  const feeDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const feeItems = [{ name: 'Tuition Fee', amount: 25000, description: 'Academic term tuition fee' }];
+  const feeStructure = await prisma.feeStructure.create({
     data: {
+      academicYear: class10A.academicYear,
+      classId: class10A.id,
+      section: class10A.section,
+      feeType: 'Tuition Fee',
+      feeItems,
+      cycle: FeeCycle.YEARLY,
+      dueDate: feeDueDate,
+      activeKey: [class10A.id, class10A.section || '*', 'tuition fee', class10A.academicYear].join(':'),
+      createdBy: adminUser.id,
+      updatedBy: adminUser.id,
+    },
+  });
+
+  const firstInvoice = await prisma.feeInvoice.create({
+    data: {
+      invoiceNumber: 'INV-SEED-0001',
+      sourceKey: `${studentProfile.id}:${feeStructure.id}:${feeStructure.academicYear}`,
+      structureId: feeStructure.id,
       studentId: studentProfile.id,
       classId: class10A.id,
-      title: 'Tuition Fee - Term 1',
-      description: 'Academic term tuition fee for 2024-2025',
-      amount: 25000,
-      paidAmount: 25000,
-      dueDate: new Date('2024-08-31'),
-      status: FeeStatus.PAID,
-      academicYear: '2024-2025',
-      term: 'Term 1',
+      section: class10A.section,
+      academicYear: class10A.academicYear,
+      feeItems,
+      subtotalAmount: 25000,
+      payableAmount: 25000,
+      paidAmount: 10000,
+      dueAmount: 15000,
+      status: InvoiceStatus.PARTIAL,
+      dueDate: feeDueDate,
+      generatedBy: adminUser.id,
     },
   });
 
-  await prisma.payment.create({
+  await prisma.feeInvoice.create({
     data: {
-      feeId: tuitionFee.id,
-      amount: 25000,
-      paymentMethod: 'Bank Transfer',
-      transactionId: 'TXN-2024-001',
-      remarks: 'Full payment received',
-      paidAt: new Date('2024-08-15'),
-    },
-  });
-
-  const pendingFee = await prisma.fee.create({
-    data: {
-      studentId: studentProfile.id,
+      invoiceNumber: 'INV-SEED-0002',
+      sourceKey: `${studentProfile2.id}:${feeStructure.id}:${feeStructure.academicYear}`,
+      structureId: feeStructure.id,
+      studentId: studentProfile2.id,
       classId: class10A.id,
-      title: 'Tuition Fee - Term 2',
-      description: 'Academic term tuition fee for 2024-2025',
-      amount: 25000,
-      paidAmount: 0,
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      status: FeeStatus.PENDING,
-      academicYear: '2024-2025',
-      term: 'Term 2',
+      section: class10A.section,
+      academicYear: class10A.academicYear,
+      feeItems,
+      subtotalAmount: 25000,
+      payableAmount: 25000,
+      dueAmount: 25000,
+      status: InvoiceStatus.UNPAID,
+      dueDate: feeDueDate,
+      generatedBy: adminUser.id,
     },
   });
 
-  await prisma.fee.create({
+  const verifiedOfflinePayment = await prisma.offlinePayment.create({
     data: {
+      invoiceId: firstInvoice.id,
       studentId: studentProfile.id,
-      classId: class10A.id,
-      title: 'Lab Fee',
-      description: 'Annual laboratory usage fee',
-      amount: 5000,
-      paidAmount: 2500,
-      dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      status: FeeStatus.OVERDUE,
-      academicYear: '2024-2025',
-      term: 'Term 1',
+      amount: 10000,
+      mode: 'BANK_TRANSFER',
+      referenceNumber: 'SEED-FEE-001',
+      status: OfflinePaymentStatus.VERIFIED,
+      addedBy: adminUser.id,
+      verifiedBy: adminUser.id,
+      verifiedAt: new Date(),
     },
   });
 
-  console.log('Fees created');
+  await prisma.receipt.create({
+    data: {
+      receiptNumber: 'RCT-SEED-0001',
+      sourceKey: `offline:${verifiedOfflinePayment.id}`,
+      invoiceId: firstInvoice.id,
+      offlinePaymentId: verifiedOfflinePayment.id,
+      studentId: studentProfile.id,
+      amount: verifiedOfflinePayment.amount,
+      paymentMode: verifiedOfflinePayment.mode,
+      transactionReference: verifiedOfflinePayment.referenceNumber,
+      issuedBy: adminUser.id,
+    },
+  });
+
+  console.log('Fee structure, invoices, and receipt created');
 
   // ── Timetable ─────────────────────────────────────────────────────────────────
   const timetable = await prisma.timetable.create({
@@ -685,7 +757,7 @@ async function main() {
 ║  - ~15 attendance records                        ║
 ║  - 2 assignments with submissions                ║
 ║  - 8 published results                           ║
-║  - 3 fee records (paid/pending/overdue)          ║
+║  - 1 fee structure, 2 invoices, 1 receipt        ║
 ║  - Weekly timetable with 11 slots                ║
 ║  - 5 announcements                               ║
 ║  - 4 notifications                               ║

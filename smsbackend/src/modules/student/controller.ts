@@ -12,6 +12,16 @@ export const createProfile = asyncHandler(async (req: AuthenticatedRequest, res:
   ApiResponse.created(res, { message: 'Student profile created', data: profile });
 });
 
+export const onboardStudent = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await service.onboardStudent(req.body, req.user!.id, req);
+  ApiResponse.created(res, {
+    message: result.credentialDelivery === 'TEMP_PASSWORD'
+      ? 'Student admission completed with temporary credentials'
+      : 'Student admission completed and invitation dispatched',
+    data: result,
+  });
+});
+
 export const getStudents = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await service.getStudents(req);
   ApiResponse.success(res, result);

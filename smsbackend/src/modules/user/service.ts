@@ -4,13 +4,13 @@ import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/apiResponse';
 import { getPaginationOptions } from '../../utils/pagination';
 import { auditLog } from '../auditLog/service';
-import { deleteCloudinaryFile } from '../../config/cloudinary';
 import { uploadToCloudinary } from '../../middlewares/upload.middleware';
 import { cacheDelPattern } from '../../config/redis';
 import { Request } from 'express';
 import prisma from '../../config/database';
-import { hashPassword } from '../../utils/password';
+import { generateRandomToken, hashPassword, hashToken } from '../../utils/password';
 import { ADMIN_PERMISSIONS, isAdminPermission } from '../admin/permissions';
+import { buildAccountActivationUrl, sendAccountInvitationEmail } from '../../utils/email';
 
 const repo = new UserRepository();
 
@@ -26,7 +26,7 @@ export class UserService {
 
   private async assertCanManageTarget(actorId: string, target: Awaited<ReturnType<UserRepository['findById']>>) {
     const actor = await this.getAdminActor(actorId);
-    const actorIsSuper = actor.isSuperAdmin || actor.permissions.length === 0;
+    const actorIsSuper = actor.isSuperAdmin === true;
     if (target?.role === Role.ADMIN && !actorIsSuper) {
       throw AppError.forbidden('Only a super admin can manage another admin account');
     }
@@ -38,16 +38,16 @@ export class UserService {
 
   async createUser(data: {
     email: string;
-    password: string;
     firstName: string;
     lastName: string;
     role: Role;
     phone?: string;
     permissions?: string[];
     isSuperAdmin?: boolean;
+    deferInvitation?: boolean;
   }, actorId: string, req: Request) {
     const actor = await this.getAdminActor(actorId);
-    const actorIsSuper = actor.isSuperAdmin || actor.permissions.length === 0;
+    const actorIsSuper = actor.isSuperAdmin === true;
     if (data.role === Role.ADMIN && !actorIsSuper) {
       throw AppError.forbidden('Only a super admin can create admin accounts');
     }
@@ -57,15 +57,21 @@ export class UserService {
     if (data.role === Role.ADMIN && !data.isSuperAdmin && permissions.length === 0) {
       permissions.push('dashboard:view');
     }
+    const invitationDeferred = Boolean(data.deferInvitation || data.role !== Role.ADMIN);
+    const invitationToken = invitationDeferred ? null : generateRandomToken();
+    const invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const user = await prisma.user.create({
       data: {
         email: data.email.toLowerCase(),
-        password: await hashPassword(data.password),
+        password: await hashPassword(generateRandomToken()),
         firstName: data.firstName.trim(),
         lastName: data.lastName.trim(),
         phone: data.phone?.trim() || undefined,
         role: data.role,
-        status: UserStatus.ACTIVE,
+        status: UserStatus.PENDING_VERIFICATION,
+        isEmailVerified: false,
+        emailVerifyToken: invitationToken ? hashToken(invitationToken) : null,
+        emailVerifyExpires: invitationToken ? invitationExpires : null,
         permissions: data.role === Role.ADMIN ? permissions : [],
         isSuperAdmin: data.role === Role.ADMIN && actorIsSuper && Boolean(data.isSuperAdmin),
       },
@@ -87,11 +93,105 @@ export class UserService {
       action: AuditAction.USER_CREATED,
       entity: 'User',
       entityId: user.id,
-      metadata: { email: user.email, role: user.role },
+      metadata: { email: user.email, role: user.role, invitationDeferred },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
-    return user;
+    const invitationDelivered = invitationToken
+      ? await sendAccountInvitationEmail(user.email, invitationToken, user.firstName)
+      : false;
+    return {
+      ...user,
+      invitationDelivered,
+      invitationDeferred,
+      ...(invitationToken ? { activationUrl: buildAccountActivationUrl(invitationToken) } : {}),
+    };
+  }
+
+  async inviteUser(userId: string, actorId: string, req: Request) {
+    const user = await repo.findById(userId);
+    if (!user || user.deletedAt) throw AppError.notFound('User not found');
+    await this.assertCanManageTarget(actorId, user);
+    if (user.status !== UserStatus.PENDING_VERIFICATION) {
+      throw AppError.badRequest('Only pending accounts can be invited. Use password reset for active accounts.');
+    }
+    if (user.role === Role.TEACHER && !user.teacherProfile) {
+      throw AppError.unprocessable('Create the teacher profile before sending an invitation');
+    }
+    if (user.role === Role.STUDENT && !user.studentProfile) {
+      throw AppError.unprocessable('Create the student admission profile before sending an invitation');
+    }
+    if (user.role === Role.PARENT) {
+      if (!user.parentProfile) throw AppError.unprocessable('Create the parent profile before sending an invitation');
+      const linkedStudents = await prisma.studentProfile.count({
+        where: { parentIds: { has: user.parentProfile.id }, deletedAt: null },
+      });
+      if (!linkedStudents) throw AppError.unprocessable('Link the parent to at least one active student before sending an invitation');
+    }
+
+    const invitationToken = generateRandomToken();
+    const invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifyToken: hashToken(invitationToken),
+        emailVerifyExpires: invitationExpires,
+        isEmailVerified: false,
+      },
+    });
+    await prisma.session.updateMany({ where: { userId }, data: { isValid: false } });
+
+    const invitationDelivered = await sendAccountInvitationEmail(user.email, invitationToken, user.firstName);
+    await auditLog({
+      actorId,
+      action: AuditAction.USER_UPDATED,
+      entity: 'UserInvitation',
+      entityId: userId,
+      metadata: { email: user.email, invitationExpires, invitationDelivered },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return {
+      invitationDelivered,
+      expiresAt: invitationExpires,
+      activationUrl: buildAccountActivationUrl(invitationToken),
+    };
+  }
+
+  async getActivationLink(userId: string, actorId: string, req: Request) {
+    const user = await repo.findById(userId);
+    if (!user || user.deletedAt) throw AppError.notFound('User not found');
+    await this.assertCanManageTarget(actorId, user);
+    if (user.status !== UserStatus.PENDING_VERIFICATION) {
+      throw AppError.badRequest('Only pending accounts have an activation link');
+    }
+
+    const invitationToken = generateRandomToken();
+    const invitationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifyToken: hashToken(invitationToken),
+        emailVerifyExpires: invitationExpires,
+        isEmailVerified: false,
+      },
+    });
+
+    await auditLog({
+      actorId,
+      action: AuditAction.USER_UPDATED,
+      entity: 'ActivationLinkRetrieved',
+      entityId: userId,
+      metadata: { email: user.email },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return {
+      activationUrl: buildAccountActivationUrl(invitationToken),
+      expiresAt: invitationExpires,
+    };
   }
 
   getPermissionCatalog() {
@@ -100,7 +200,7 @@ export class UserService {
 
   async updatePermissions(userId: string, permissions: string[], isSuperAdminValue: boolean | undefined, actorId: string, req: Request) {
     const actor = await this.getAdminActor(actorId);
-    const actorIsSuper = actor.isSuperAdmin || actor.permissions.length === 0;
+    const actorIsSuper = actor.isSuperAdmin === true;
     if (!actorIsSuper) throw AppError.forbidden('Only a super admin can change admin permissions');
     const user = await repo.findById(userId);
     if (!user || user.deletedAt) throw AppError.notFound('User not found');
@@ -130,12 +230,15 @@ export class UserService {
 
   async getUsers(req: Request) {
     const { page, limit, skip, sortBy, sortOrder } = getPaginationOptions(req);
-    const { role, status, search } = req.query;
+    const { role, status, search, profileMissing } = req.query;
 
     const where: Record<string, unknown> = {};
 
     if (role) where.role = role as Role;
     if (status) where.status = status as UserStatus;
+    if (profileMissing === 'true' && role === Role.STUDENT) where.studentProfile = { is: null };
+    if (profileMissing === 'true' && role === Role.TEACHER) where.teacherProfile = { is: null };
+    if (profileMissing === 'true' && role === Role.PARENT) where.parentProfile = { is: null };
     if (search) {
       where.OR = [
         { firstName: { contains: search as string, mode: 'insensitive' } },
@@ -246,8 +349,14 @@ export class UserService {
     if (userId === actorId && status !== UserStatus.ACTIVE) {
       throw AppError.badRequest('You cannot deactivate or suspend your own account');
     }
+    if (status === UserStatus.ACTIVE && !user.isEmailVerified) {
+      throw AppError.badRequest('Unverified accounts must activate through an administrator invitation');
+    }
 
     const updated = await repo.update(userId, { status });
+    if (status !== UserStatus.ACTIVE) {
+      await prisma.session.updateMany({ where: { userId }, data: { isValid: false } });
+    }
 
     await auditLog({
       actorId,

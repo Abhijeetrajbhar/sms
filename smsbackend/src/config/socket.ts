@@ -3,6 +3,7 @@ import { Server as SocketServer, Socket } from 'socket.io';
 import config from './env';
 import { verifyAccessToken } from '../utils/jwt';
 import logger from '../utils/logger';
+import prisma from './database';
 
 let io: SocketServer;
 
@@ -28,8 +29,15 @@ export function initializeSocket(httpServer: HttpServer): SocketServer {
       }
 
       const payload = verifyAccessToken(token);
-      (socket as Socket & { userId: string; role: string }).userId = payload.userId;
-      (socket as Socket & { userId: string; role: string }).role = payload.role;
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { id: true, role: true, status: true, deletedAt: true },
+      });
+      if (!user || user.deletedAt || user.status !== 'ACTIVE') {
+        return next(new Error('Account is not active'));
+      }
+      (socket as Socket & { userId: string; role: string }).userId = user.id;
+      (socket as Socket & { userId: string; role: string }).role = user.role;
       next();
     } catch {
       next(new Error('Invalid authentication token'));
@@ -48,21 +56,11 @@ export function initializeSocket(httpServer: HttpServer): SocketServer {
     });
   });
 
-  logger.info('✅ Socket.io initialized');
-  return io;
-}
-
-export function getSocketServer(): SocketServer {
-  if (!io) throw new Error('Socket server not initialized');
+  logger.info('Socket.io initialized');
   return io;
 }
 
 export function emitToUser(userId: string, event: string, data: unknown): void {
   if (!io) return;
   io.to(`user:${userId}`).emit(event, data);
-}
-
-export function emitToRoom(room: string, event: string, data: unknown): void {
-  if (!io) return;
-  io.to(room).emit(event, data);
 }

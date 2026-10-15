@@ -45,6 +45,10 @@ export class AppError extends Error {
     return new AppError(message, 429);
   }
 
+  static serviceUnavailable(message = 'Service temporarily unavailable'): AppError {
+    return new AppError(message, 503);
+  }
+
   static internal(message = 'Internal server error'): AppError {
     return new AppError(message, 500);
   }

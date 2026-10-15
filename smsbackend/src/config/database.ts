@@ -8,11 +8,22 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log:
-      process.env.NODE_ENV === 'development'
-        ? ['query', 'error', 'warn']
-        : ['error'],
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
+
+if (!globalForPrisma.prisma) {
+  prisma.$use(async (params, next) => {
+    if (params.args?.where?.deletedAt === null) {
+      params.args.where.deletedAt = undefined;
+      params.args.where.OR = [
+        ...(params.args.where.OR || []),
+        { deletedAt: null },
+        { deletedAt: { isSet: false } },
+      ];
+    }
+    return next(params);
+  });
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

@@ -12,6 +12,16 @@ export const createProfile = asyncHandler(async (req: AuthenticatedRequest, res:
   ApiResponse.created(res, { message: 'Teacher profile created', data: profile });
 });
 
+export const onboardTeacher = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await service.onboardTeacher(req.body, req.user!.id, req);
+  ApiResponse.created(res, {
+    message: result.credentialDelivery === 'TEMP_PASSWORD'
+      ? 'Teacher onboarded successfully with temporary credentials'
+      : 'Teacher onboarded and invitation dispatched',
+    data: result,
+  });
+});
+
 export const getTeachers = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await service.getTeachers(req);
   ApiResponse.success(res, result);

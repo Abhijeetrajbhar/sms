@@ -12,7 +12,7 @@ export class OpenAIProvider implements AIProvider {
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey;
+    return config.AI_ENABLED && !!this.apiKey;
   }
 
   async complete(prompt: string, systemPrompt?: string): Promise<string> {

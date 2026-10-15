@@ -165,16 +165,16 @@ export class ResultService {
     academicYear: string;
   }, actorId: string, req: Request) {
     const results = await prisma.result.findMany({
-      where: { ...params, isPublished: false },
+      where: { ...params, isPublished: false, status: ResultEntryStatus.SUBMITTED },
       include: {
         student: { select: { userId: true } },
       },
     });
 
-    if (!results.length) throw AppError.notFound('No unpublished results found');
+    if (!results.length) throw AppError.notFound('No submitted unpublished results found');
 
     await prisma.result.updateMany({
-      where: { ...params, isPublished: false },
+      where: { ...params, isPublished: false, status: ResultEntryStatus.SUBMITTED },
       data: {
         isPublished: true,
         status: ResultEntryStatus.LOCKED,
@@ -404,11 +404,28 @@ export class ResultService {
     term: string;
   }, user: NonNullable<AuthenticatedRequest['user']>, req: Request) {
     await assertTeacherSubjectAccess(user, data.classId, data.subjectId);
+    const [activeStudents, draftResults] = await Promise.all([
+      prisma.studentProfile.findMany({
+        where: { classId: data.classId, deletedAt: null },
+        select: { id: true },
+      }),
+      prisma.result.findMany({
+        where: { ...data, status: ResultEntryStatus.DRAFT, isPublished: false },
+        select: { studentId: true },
+      }),
+    ]);
+
+    if (!draftResults.length) throw AppError.notFound('No draft marks found to submit');
+    const draftStudentIds = new Set(draftResults.map((item) => item.studentId));
+    const missingCount = activeStudents.filter((student) => !draftStudentIds.has(student.id)).length;
+    if (missingCount) {
+      throw AppError.unprocessable(`Draft marks are missing for ${missingCount} active student(s)`);
+    }
+
     const result = await prisma.result.updateMany({
       where: { ...data, status: ResultEntryStatus.DRAFT, isPublished: false },
       data: { status: ResultEntryStatus.SUBMITTED, submittedAt: new Date() },
     });
-    if (!result.count) throw AppError.notFound('No draft marks found to submit');
     await auditLog({
       actorId: user.id,
       action: AuditAction.MARKS_SUBMITTED,

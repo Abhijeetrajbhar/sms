@@ -16,6 +16,7 @@ import { getPaginationOptions } from '../../utils/pagination';
 import { auditLog } from '../auditLog/service';
 import { assertInvoiceAccess, getInvoiceScope } from '../payment/access';
 import { assertParentStudentAccess } from '../parent/access';
+import { cacheDelPattern } from '../../config/redis';
 
 interface FeeItem {
   name: string;
@@ -229,6 +230,15 @@ export class FinanceService {
   async createOfflinePayment(data: { invoiceId: string; amount: number; mode: string; referenceNumber?: string; proofFile?: string }, actorId: string, req: AuthenticatedRequest) {
     const invoice = await prisma.feeInvoice.findUnique({ where: { id: data.invoiceId } });
     if (!invoice) throw AppError.notFound('Fee invoice not found');
+    const terminalStatuses: InvoiceStatus[] = [
+      InvoiceStatus.PAID,
+      InvoiceStatus.REFUNDED,
+      InvoiceStatus.CANCELLED,
+      InvoiceStatus.EXPIRED,
+    ];
+    if (terminalStatuses.includes(invoice.status)) {
+      throw AppError.unprocessable(`Invoice is ${invoice.status.toLowerCase()} and cannot accept offline payments`);
+    }
     if (data.amount > invoice.dueAmount) throw AppError.unprocessable('Payment exceeds invoice due amount');
     const payment = await prisma.offlinePayment.create({
       data: { ...data, studentId: invoice.studentId, addedBy: actorId },
@@ -288,6 +298,7 @@ export class FinanceService {
       return updatedPayment;
     }).then(async (payment) => {
       await this.audit(actorId, AuditAction.OFFLINE_PAYMENT_APPROVED, 'OfflinePayment', id, req);
+      await cacheDelPattern('analytics:*').catch(() => undefined);
       return payment;
     });
   }

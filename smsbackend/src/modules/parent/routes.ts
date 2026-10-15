@@ -9,6 +9,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', adminOnly, requireAdminPermission('parents:view'), controller.getParents);
+router.post('/onboard', adminOnly, requireAdminPermission('parents:create'), controller.onboardParent);
 router.post('/', adminOnly, requireAdminPermission('parents:create'), controller.createProfile);
 router.get('/me/dashboard', authorize(Role.PARENT), controller.getMyDashboard);
 router.get('/me/children', authorize(Role.PARENT), controller.getMyChildren);

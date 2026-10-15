@@ -4,14 +4,15 @@ import logger from '../../../utils/logger';
 
 export class GeminiProvider implements AIProvider {
   private readonly apiKey: string;
-  private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  private readonly baseUrl: string;
 
   constructor() {
     this.apiKey = config.GEMINI_API_KEY || '';
+    this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.GEMINI_MODEL)}:generateContent`;
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey;
+    return config.AI_ENABLED && !!this.apiKey;
   }
 
   async complete(prompt: string, systemPrompt?: string): Promise<string> {

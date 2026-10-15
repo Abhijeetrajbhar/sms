@@ -9,10 +9,10 @@ import Modal from '../ui/Modal.jsx';
 import { api } from '../../services/api.js';
 import { formatCurrency } from '../../utils/formatters.js';
 import { statusTone } from '../../utils/statusStyles.js';
+import { hasPermission } from '../../utils/permissions.js';
 
 const selectClass = 'focus-ring min-h-11 w-full rounded-lg border border-outline-variant/70 bg-surface-container-lowest px-4 text-base font-semibold text-on-surface sm:text-sm';
-const today = new Date().toISOString().slice(0, 10);
-const initialStructure = { academicYear: '2025-2026', classId: '', feeType: '', amount: '', cycle: 'YEARLY', dueDate: today };
+const initialStructure = { academicYear: '', classId: '', feeType: '', amount: '', cycle: 'YEARLY', dueDate: '' };
 const initialInvoice = { structureId: '', targetType: 'class', targetId: '', discountAmount: '0' };
 const initialOffline = { invoiceId: '', amount: '', mode: 'CASH', referenceNumber: '' };
 const initialRefund = { invoiceId: '', paymentAttemptId: '', amount: '', reason: '' };
@@ -21,7 +21,7 @@ function StatusBadge({ status }) {
   return <Badge className={statusTone[String(status).toLowerCase()] || statusTone.info}>{String(status).replaceAll('_', ' ')}</Badge>;
 }
 
-export default function FinanceOperations({ data, invoices, onChanged }) {
+export default function FinanceOperations({ data, invoices, currentUser, onChanged }) {
   const [structures, setStructures] = useState([]);
   const [refunds, setRefunds] = useState([]);
   const [offlinePayments, setOfflinePayments] = useState([]);
@@ -35,27 +35,36 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
   const [invoiceForm, setInvoiceForm] = useState(initialInvoice);
   const [offlineForm, setOfflineForm] = useState(initialOffline);
   const [refundForm, setRefundForm] = useState(initialRefund);
+  const canViewFees = hasPermission(currentUser, 'fees:view');
+  const canCreateFees = hasPermission(currentUser, 'fees:create');
+  const canCollectFees = hasPermission(currentUser, 'fees:collect');
+  const canVerifyPayments = hasPermission(currentUser, 'payments:verify');
+  const canRefund = hasPermission(currentUser, 'fees:refund');
+  const canViewReports = hasPermission(currentUser, 'reports:view');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const [structureResponse, refundResponse, offlineResponse, summaryResponse] = await Promise.all([
-        api.get('/fees/structures?limit=100'),
-        api.get('/refunds?limit=100'),
-        api.get('/fees/offline-payments?limit=100'),
-        api.get('/fees/reports/summary'),
+        canViewFees ? api.get('/fees/structures?limit=100') : Promise.resolve({ data: [] }),
+        canViewFees ? api.get('/refunds?limit=100') : Promise.resolve({ data: [] }),
+        canVerifyPayments ? api.get('/fees/offline-payments?limit=100') : Promise.resolve({ data: [] }),
+        canViewReports ? api.get('/fees/reports/summary') : Promise.resolve({ data: null }),
       ]);
-      setStructures(Array.isArray(structureResponse?.data) ? structureResponse.data : []);
-      setRefunds(Array.isArray(refundResponse?.data) ? refundResponse.data : []);
-      setOfflinePayments(Array.isArray(offlineResponse?.data) ? offlineResponse.data : []);
-      setSummary(summaryResponse?.data || null);
+      const rawStructures = structureResponse?.data?.data || structureResponse?.data;
+      const rawRefunds = refundResponse?.data?.data || refundResponse?.data;
+      const rawOffline = offlineResponse?.data?.data || offlineResponse?.data;
+      setStructures(Array.isArray(rawStructures) ? rawStructures : []);
+      setRefunds(Array.isArray(rawRefunds) ? rawRefunds : []);
+      setOfflinePayments(Array.isArray(rawOffline) ? rawOffline : []);
+      setSummary(summaryResponse?.data?.data || summaryResponse?.data || null);
     } catch (loadError) {
       setError(loadError.message || 'Finance operations could not be loaded.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canVerifyPayments, canViewFees, canViewReports]);
 
   useEffect(() => {
     load();
@@ -79,43 +88,55 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
 
   const createStructure = (event) => {
     event.preventDefault();
-    run(() => api.post('/fees/structures', {
-      academicYear: structureForm.academicYear,
-      classId: structureForm.classId,
-      feeType: structureForm.feeType,
-      feeItems: [{ name: structureForm.feeType, amount: Number(structureForm.amount) }],
-      cycle: structureForm.cycle,
-      dueDate: structureForm.dueDate,
-    }), 'Fee structure created.', true);
+    run(async () => {
+      await api.post('/fees/structures', {
+        academicYear: structureForm.academicYear,
+        classId: structureForm.classId,
+        feeType: structureForm.feeType,
+        feeItems: [{ name: structureForm.feeType, amount: Number(structureForm.amount) }],
+        cycle: structureForm.cycle,
+        dueDate: structureForm.dueDate,
+      });
+      setStructureForm(initialStructure);
+    }, 'Fee structure created.', true);
   };
 
   const generateInvoices = (event) => {
     event.preventDefault();
-    run(() => api.post('/fees/invoices/generate', {
-      structureId: invoiceForm.structureId,
-      ...(invoiceForm.targetType === 'class' ? { classId: invoiceForm.targetId } : { studentId: invoiceForm.targetId }),
-      discountAmount: Number(invoiceForm.discountAmount || 0),
-    }), 'Fee invoice generation completed.', true);
+    run(async () => {
+      await api.post('/fees/invoices/generate', {
+        structureId: invoiceForm.structureId,
+        ...(invoiceForm.targetType === 'class' ? { classId: invoiceForm.targetId } : { studentId: invoiceForm.targetId }),
+        discountAmount: Number(invoiceForm.discountAmount || 0),
+      });
+      setInvoiceForm(initialInvoice);
+    }, 'Fee invoice generation completed.', true);
   };
 
   const recordOffline = (event) => {
     event.preventDefault();
-    run(() => api.post('/fees/offline-payments', {
-      invoiceId: offlineForm.invoiceId,
-      amount: Number(offlineForm.amount),
-      mode: offlineForm.mode,
-      ...(offlineForm.referenceNumber ? { referenceNumber: offlineForm.referenceNumber } : {}),
-    }), 'Offline payment submitted for verification.', true);
+    run(async () => {
+      await api.post('/fees/offline-payments', {
+        invoiceId: offlineForm.invoiceId,
+        amount: Number(offlineForm.amount),
+        mode: offlineForm.mode,
+        ...(offlineForm.referenceNumber ? { referenceNumber: offlineForm.referenceNumber } : {}),
+      });
+      setOfflineForm(initialOffline);
+    }, 'Offline payment submitted for verification.', true);
   };
 
   const requestRefund = (event) => {
     event.preventDefault();
-    run(() => api.post('/refunds/request', {
-      invoiceId: refundForm.invoiceId,
-      ...(refundForm.paymentAttemptId ? { paymentAttemptId: refundForm.paymentAttemptId } : {}),
-      amount: Number(refundForm.amount),
-      reason: refundForm.reason,
-    }), 'Refund request created for approval.', true);
+    run(async () => {
+      await api.post('/refunds/request', {
+        invoiceId: refundForm.invoiceId,
+        ...(refundForm.paymentAttemptId ? { paymentAttemptId: refundForm.paymentAttemptId } : {}),
+        amount: Number(refundForm.amount),
+        reason: refundForm.reason,
+      });
+      setRefundForm(initialRefund);
+    }, 'Refund request created for approval.', true);
   };
 
   const approveOffline = (row) => {
@@ -154,7 +175,7 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
     { key: 'mode', label: 'Mode', render: (row) => String(row.mode).replaceAll('_', ' ') },
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', label: 'Review', render: (row) => row.status === 'PENDING_VERIFICATION'
-      ? <div className="flex gap-2"><Button size="sm" icon={CheckCircle2} disabled={saving} onClick={() => approveOffline(row)}>Verify</Button><Button size="sm" variant="danger" icon={XCircle} disabled={saving} onClick={() => rejectOffline(row)}>Reject</Button></div>
+      ? canVerifyPayments ? <div className="flex gap-2"><Button size="sm" icon={CheckCircle2} disabled={saving} onClick={() => approveOffline(row)}>Verify</Button><Button size="sm" variant="danger" icon={XCircle} disabled={saving} onClick={() => rejectOffline(row)}>Reject</Button></div> : <span className="text-xs font-semibold text-on-surface-variant">Verification permission required</span>
       : <span className="text-xs font-semibold text-on-surface-variant">Reviewed</span>,
     },
   ];
@@ -166,9 +187,9 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
     { key: 'reason', label: 'Reason' },
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', label: 'Action', render: (row) => row.status === 'REQUESTED'
-      ? <Button size="sm" variant="secondary" disabled={saving} onClick={() => approveRefund(row)}>Approve</Button>
+      ? canRefund ? <Button size="sm" variant="secondary" disabled={saving} onClick={() => approveRefund(row)}>Approve</Button> : <span className="text-xs font-semibold text-on-surface-variant">Refund permission required</span>
       : ['APPROVED', 'FAILED'].includes(row.status)
-        ? <Button size="sm" variant="danger" disabled={saving} onClick={() => processRefund(row)}>Process</Button>
+        ? canRefund ? <Button size="sm" variant="danger" disabled={saving} onClick={() => processRefund(row)}>Process</Button> : <span className="text-xs font-semibold text-on-surface-variant">Refund permission required</span>
         : <span className="text-xs font-semibold text-on-surface-variant">No action</span>,
     },
   ];
@@ -185,10 +206,10 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
             <p className="mt-1 text-sm leading-6 text-on-surface-variant">Create structures, generate invoices, verify offline collections, and control refunds.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:flex">
-            <Button variant="secondary" icon={Plus} onClick={() => setModal('structure')}>Fee Structure</Button>
-            <Button variant="secondary" icon={FilePlus2} onClick={() => setModal('invoice')}>Generate Invoices</Button>
-            <Button variant="secondary" icon={Landmark} onClick={() => setModal('offline')}>Offline Payment</Button>
-            <Button variant="danger" icon={RotateCcw} onClick={() => setModal('refund')}>Request Refund</Button>
+            {canCreateFees ? <Button variant="secondary" icon={Plus} onClick={() => setModal('structure')}>Fee Structure</Button> : null}
+            {canCreateFees ? <Button variant="secondary" icon={FilePlus2} onClick={() => setModal('invoice')}>Generate Invoices</Button> : null}
+            {canCollectFees ? <Button variant="secondary" icon={Landmark} onClick={() => setModal('offline')}>Offline Payment</Button> : null}
+            {canRefund ? <Button variant="danger" icon={RotateCcw} onClick={() => setModal('refund')}>Request Refund</Button> : null}
           </div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -204,9 +225,9 @@ export default function FinanceOperations({ data, invoices, onChanged }) {
       {notice ? <p role="status" className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-on-surface">{notice}</p> : null}
       {error ? <div role="alert" className="flex flex-col gap-3 rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button size="sm" variant="secondary" onClick={load}>Retry</Button></div> : null}
 
-      <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Fee structures</h2><DataTable columns={structureColumns} rows={structures} emptyText={loading ? 'Loading structures...' : 'No fee structures created'} /></Card>
-      <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Offline payment verification</h2><DataTable columns={offlineColumns} rows={offlinePayments} emptyText={loading ? 'Loading offline payments...' : 'No offline payments submitted'} /></Card>
-      <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Refund management</h2><DataTable columns={refundColumns} rows={refunds} emptyText={loading ? 'Loading refunds...' : 'No refund requests found'} /></Card>
+      {canViewFees ? <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Fee structures</h2><DataTable columns={structureColumns} rows={structures} emptyText={loading ? 'Loading structures...' : 'No fee structures created'} /></Card> : null}
+      {canVerifyPayments ? <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Offline payment verification</h2><DataTable columns={offlineColumns} rows={offlinePayments} emptyText={loading ? 'Loading offline payments...' : 'No offline payments submitted'} /></Card> : null}
+      {canViewFees ? <Card><h2 className="mb-4 text-lg font-bold text-on-surface">Refund management</h2><DataTable columns={refundColumns} rows={refunds} emptyText={loading ? 'Loading refunds...' : 'No refund requests found'} /></Card> : null}
 
       <Modal open={modal === 'structure'} title="Create Fee Structure" description="Create an active class-wise fee category. Duplicate active structures are rejected." onClose={() => setModal('')} size="lg">
         <form className="grid gap-4 sm:grid-cols-2" onSubmit={createStructure}>

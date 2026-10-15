@@ -1,70 +1,69 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: light;
-  --ring: rgb(109 59 215 / 0.28);
-  --color-ink: 25 28 30;
-  --color-graphite: 40 48 68;
-  --color-background: 246 243 252;
-  --color-surface: 246 243 252;
+  --ring: rgb(99 102 241 / 0.35);
+  --color-ink: 15 23 42;
+  --color-graphite: 30 41 59;
+  --color-background: 248 250 252;
+  --color-surface: 255 255 255;
   --color-surface-container-lowest: 255 255 255;
-  --color-surface-container-low: 237 232 246;
-  --color-surface-container: 229 222 239;
-  --color-surface-container-high: 220 213 230;
-  --color-surface-container-highest: 203 195 215;
-  --color-surface-dim: 218 226 253;
-  --color-on-background: 25 28 30;
-  --color-on-surface: 25 28 30;
-  --color-on-surface-variant: 73 68 84;
-  --color-outline: 115 107 124;
-  --color-outline-variant: 203 195 215;
-  --color-primary: 109 59 215;
-  --color-primary-container: 208 188 255;
-  --color-primary-fixed: 233 221 255;
+  --color-surface-container-low: 241 245 249;
+  --color-surface-container: 226 232 240;
+  --color-surface-container-high: 203 213 225;
+  --color-surface-container-highest: 148 163 184;
+  --color-surface-dim: 226 232 240;
+  --color-on-background: 15 23 42;
+  --color-on-surface: 15 23 42;
+  --color-on-surface-variant: 71 85 105;
+  --color-outline: 148 163 184;
+  --color-outline-variant: 226 232 240;
+  --color-primary: 99 102 241;
+  --color-primary-container: 224 231 255;
+  --color-primary-fixed: 224 231 255;
   --color-on-primary: 255 255 255;
-  --color-secondary: 54 78 3;
-  --color-secondary-container: 206 238 147;
-  --color-secondary-fixed: 206 238 147;
-  --color-tertiary: 68 71 73;
-  --color-tertiary-container: 224 227 229;
-  --color-error: 147 0 10;
-  --color-error-container: 255 218 214;
-  --color-on-error-container: 65 0 2;
+  --color-secondary: 16 185 129;
+  --color-secondary-container: 209 250 229;
+  --color-secondary-fixed: 209 250 229;
+  --color-tertiary: 14 165 233;
+  --color-tertiary-container: 224 242 254;
+  --color-error: 225 29 72;
+  --color-error-container: 255 228 230;
+  --color-on-error-container: 159 18 57;
 }
 
 .dark {
   color-scheme: dark;
-  --ring: rgb(208 188 255 / 0.30);
-  --color-ink: 6 14 32;
-  --color-graphite: 19 27 46;
-  --color-background: 11 19 38;
-  --color-surface: 11 19 38;
-  --color-surface-container-lowest: 6 14 32;
-  --color-surface-container-low: 19 27 46;
-  --color-surface-container: 23 31 51;
-  --color-surface-container-high: 34 42 61;
-  --color-surface-container-highest: 45 52 73;
-  --color-surface-dim: 11 19 38;
-  --color-on-background: 218 226 253;
-  --color-on-surface: 218 226 253;
-  --color-on-surface-variant: 203 195 215;
-  --color-outline: 149 142 160;
-  --color-outline-variant: 73 68 84;
-  --color-primary: 208 188 255;
-  --color-primary-container: 160 120 255;
-  --color-primary-fixed: 233 221 255;
-  --color-on-primary: 35 0 92;
-  --color-secondary: 179 209 122;
-  --color-secondary-container: 56 80 5;
-  --color-secondary-fixed: 206 238 147;
-  --color-tertiary: 196 199 201;
-  --color-tertiary-container: 142 145 147;
-  --color-error: 255 180 171;
-  --color-error-container: 147 0 10;
-  --color-on-error-container: 255 218 214;
+  --ring: rgb(129 140 248 / 0.35);
+  --color-ink: 9 10 15;
+  --color-graphite: 15 18 27;
+  --color-background: 9 10 15;
+  --color-surface: 12 15 23;
+  --color-surface-container-lowest: 8 9 13;
+  --color-surface-container-low: 15 18 27;
+  --color-surface-container: 21 25 38;
+  --color-surface-container-high: 28 34 50;
+  --color-surface-container-highest: 37 44 65;
+  --color-surface-dim: 9 10 15;
+  --color-on-background: 241 245 249;
+  --color-on-surface: 241 245 249;
+  --color-on-surface-variant: 148 163 184;
+  --color-outline: 71 85 105;
+  --color-outline-variant: 33 39 55;
+  --color-primary: 129 140 248;
+  --color-primary-container: 49 46 129;
+  --color-primary-fixed: 224 231 255;
+  --color-on-primary: 255 255 255;
+  --color-secondary: 52 211 153;
+  --color-secondary-container: 6 78 59;
+  --color-secondary-fixed: 209 250 229;
+  --color-tertiary: 56 189 248;
+  --color-tertiary-container: 12 74 110;
+  --color-error: 251 113 133;
+  --color-error-container: 136 19 55;
+  --color-on-error-container: 255 228 230;
 }
 
 * {
@@ -142,16 +141,28 @@ svg {
 }
 
 @layer components {
+  .linear-card {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-200 dark:border-white/[0.08] dark:bg-[#0c0e14] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-4px_rgba(0,0,0,0.5)];
+  }
+
+  .linear-card-interactive {
+    @apply linear-card hover:-translate-y-0.5 hover:border-indigo-500/40 hover:shadow-md dark:hover:border-indigo-500/40 dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_28px_-8px_rgba(99,102,241,0.25)];
+  }
+
+  .raycast-kbd {
+    @apply inline-flex items-center justify-center font-mono text-[11px] font-semibold px-2 py-0.5 rounded border border-outline-variant/50 bg-surface-container-low text-on-surface-variant shadow-[0_1px_0_1px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300 dark:shadow-[0_1px_0_1px_rgba(0,0,0,0.4)];
+  }
+
   .glass-card {
-    @apply border border-outline-variant/40 bg-surface-container-lowest/75 backdrop-blur-xl shadow-soft transition duration-300;
+    @apply border border-slate-200/80 bg-white shadow-sm transition duration-200 dark:border-white/[0.08] dark:bg-[#0c0e14];
   }
 
   .glass-card:hover {
-    @apply border-primary/30 bg-surface-container-lowest/90;
+    @apply border-indigo-500/40 bg-slate-50 dark:bg-[#121622];
   }
 
   .dark-glass-card {
-    @apply border border-outline-variant/40 bg-surface-container-lowest/75 text-on-surface backdrop-blur-xl shadow-soft;
+    @apply border border-slate-200/80 bg-white text-on-surface shadow-sm dark:border-white/[0.08] dark:bg-[#0c0e14];
   }
 
   .focus-ring {
@@ -164,7 +175,7 @@ svg {
   }
 
   .page-heading {
-    @apply break-words text-2xl font-semibold leading-tight tracking-normal text-on-background dark:text-white sm:text-[28px] md:text-[32px];
+    @apply break-words text-2xl font-bold leading-tight tracking-tight text-on-background dark:text-white sm:text-[28px] md:text-[32px];
   }
 
   .page-subtitle {
@@ -174,6 +185,13 @@ svg {
   .noise-overlay {
     background-image: linear-gradient(rgb(var(--color-on-surface) / 0.035) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--color-on-surface) / 0.035) 1px, transparent 1px);
     background-size: 42px 42px;
+  }
+
+  .linear-grid {
+    background-size: 40px 40px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   }
 }
 
