@@ -1,4 +1,3 @@
-// controller.ts
 import { Response } from 'express';
 import { StudentService } from './service';
 import { ApiResponse } from '../../utils/apiResponse';

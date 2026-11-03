@@ -1,4 +1,3 @@
-// ai.controller.ts
 import { Response } from 'express';
 import aiService from './ai.service';
 import { ApiResponse } from '../../utils/apiResponse';

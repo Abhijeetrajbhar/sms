@@ -1,4 +1,3 @@
-// service.ts
 import prisma from '../../config/database';
 import { FeeStatus } from '@prisma/client';
 import { AppError } from '../../utils/AppError';

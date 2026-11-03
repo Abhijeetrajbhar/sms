@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log(' Seeding EduManage database...\n');
 
-  // ── Clean up ────────────────────────────────────────────────────────────────
+  // Clean up existing database tables
   await prisma.$transaction([
     prisma.auditLog.deleteMany(),
     prisma.refund.deleteMany(),
@@ -65,7 +65,7 @@ async function main() {
 
   const hashPwd = (p: string) => bcrypt.hash(p, 10);
 
-  // ── Users ────────────────────────────────────────────────────────────────────
+  // Seed base users
   const [adminUser, teacherUser, teacher2User, studentUser, student2User, parentUser] =
     await Promise.all([
       prisma.user.create({
@@ -158,7 +158,7 @@ async function main() {
 
   console.log('Users created');
 
-  // ── Subjects ──────────────────────────────────────────────────────────────────
+  // Seed subjects
   const [mathSubject, scienceSubject, englishSubject, historySubject, csSubject] =
     await Promise.all([
       prisma.subject.create({ data: { name: 'Mathematics', code: 'MATH101', credits: 4, description: 'Core mathematics including algebra and geometry' } }),
@@ -170,7 +170,7 @@ async function main() {
 
   console.log('Subjects created');
 
-  // ── Teacher Profiles ──────────────────────────────────────────────────────────
+  // Seed teacher profiles
   const [teacherProfile, teacherProfile2] = await Promise.all([
     prisma.teacherProfile.create({
       data: {
@@ -196,7 +196,7 @@ async function main() {
 
   console.log('Teacher profiles created');
 
-  // ── Class ─────────────────────────────────────────────────────────────────────
+  // Seed classes
   const class10A = await prisma.class.create({
     data: {
       name: 'Grade 10',
@@ -223,7 +223,7 @@ async function main() {
 
   console.log('Classes created');
 
-  // ── Subject-Teacher Assignments ───────────────────────────────────────────────
+  // Seed subject-teacher assignments
   await Promise.all([
     prisma.subjectTeacher.create({ data: { classId: class10A.id, subjectId: mathSubject.id, teacherId: teacherProfile.id } }),
     prisma.subjectTeacher.create({ data: { classId: class10A.id, subjectId: scienceSubject.id, teacherId: teacherProfile.id } }),
@@ -234,7 +234,7 @@ async function main() {
 
   console.log('Subject-teacher assignments created');
 
-  // ── Parent Profile ────────────────────────────────────────────────────────────
+  // Seed parent profiles
   const parentProfile = await prisma.parentProfile.create({
     data: {
       userId: parentUser.id,
@@ -244,7 +244,7 @@ async function main() {
     },
   });
 
-  // ── Student Profiles ──────────────────────────────────────────────────────────
+  // Seed student profiles
   const [studentProfile, studentProfile2] = await Promise.all([
     prisma.studentProfile.create({
       data: {
@@ -276,7 +276,7 @@ async function main() {
 
   console.log('Student profiles created');
 
-  // ── Attendance Records ────────────────────────────────────────────────────────
+  // Seed attendance records
   const attendanceDates = Array.from({ length: 20 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (20 - i));
@@ -328,7 +328,7 @@ async function main() {
 
   console.log('Attendance records created');
 
-  // ── Assignments ───────────────────────────────────────────────────────────────
+  // Seed assignments
   const assignment1 = await prisma.assignment.create({
     data: {
       title: 'Quadratic Equations Problem Set',
@@ -389,7 +389,7 @@ async function main() {
 
   console.log('Assignments and submissions created');
 
-  // ── Results ───────────────────────────────────────────────────────────────────
+  // Seed examination results
   const resultData = [
     { subjectId: mathSubject.id, marksObtained: 88, maxMarks: 100 },
     { subjectId: scienceSubject.id, marksObtained: 76, maxMarks: 100 },
@@ -469,7 +469,7 @@ async function main() {
 
   console.log('Results created');
 
-  // ── Fees ──────────────────────────────────────────────────────────────────────
+  // Seed fees and invoices
   const feeDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const feeItems = [{ name: 'Tuition Fee', amount: 25000, description: 'Academic term tuition fee' }];
   const feeStructure = await prisma.feeStructure.create({
@@ -556,7 +556,7 @@ async function main() {
 
   console.log('Fee structure, invoices, and receipt created');
 
-  // ── Timetable ─────────────────────────────────────────────────────────────────
+  // Seed timetables
   const timetable = await prisma.timetable.create({
     data: {
       name: 'Grade 10-A Weekly Schedule',
@@ -588,7 +588,7 @@ async function main() {
 
   console.log('✅ Timetable created');
 
-  // ── Announcements ─────────────────────────────────────────────────────────────
+  // Seed announcements
   await Promise.all([
     prisma.announcement.create({
       data: {
@@ -641,7 +641,7 @@ async function main() {
 
   console.log('✅ Announcements created');
 
-  // ── Notifications ─────────────────────────────────────────────────────────────
+  // Seed notifications
   await Promise.all([
     prisma.notification.create({
       data: {
@@ -687,7 +687,7 @@ async function main() {
 
   console.log('✅ Notifications created');
 
-  // ── Audit Logs ─────────────────────────────────────────────────────────────────
+  // Seed audit trail logs
   await Promise.all([
     prisma.auditLog.create({
       data: {
@@ -735,35 +735,28 @@ async function main() {
 
   console.log(' Audit logs created');
 
-  // ── Summary ───────────────────────────────────────────────────────────────────
-  console.log(`
-╔══════════════════════════════════════════════════╗
-║           Seed Complete!                       ║
-╠══════════════════════════════════════════════════╣
-║  Demo Accounts:                                  ║
-║                                                  ║
-║  Admin   : admin@edumanage.com   / Admin@123     ║
-║  Teacher : teacher@edumanage.com / Teacher@123   ║
-║  Teacher2: teacher2@edumanage.com/ Teacher@123   ║
-║  Student : student@edumanage.com / Student@123   ║
-║  Student2: student2@edumanage.com/ Student@123   ║
-║  Parent  : parent@edumanage.com  / Parent@123    ║
-╠══════════════════════════════════════════════════╣
-║  Data Created:                                   ║
-║  - 6 users across all roles                      ║
-║  - 2 classes, 5 subjects                         ║
-║  - 2 teacher profiles, 2 student profiles        ║
-║  - 1 parent profile (linked to student)          ║
-║  - ~15 attendance records                        ║
-║  - 2 assignments with submissions                ║
-║  - 8 published results                           ║
-║  - 1 fee structure, 2 invoices, 1 receipt        ║
-║  - Weekly timetable with 11 slots                ║
-║  - 5 announcements                               ║
-║  - 4 notifications                               ║
-║  - 4 audit log entries                           ║
-╚══════════════════════════════════════════════════╝
-  `);
+  // Seeding summary
+  console.log('\n--- Seed Complete ---');
+  console.log('Demo Accounts:');
+  console.log('  Admin    : admin@edumanage.com   / Admin@123');
+  console.log('  Teacher  : teacher@edumanage.com / Teacher@123');
+  console.log('  Teacher2 : teacher2@edumanage.com/ Teacher@123');
+  console.log('  Student  : student@edumanage.com / Student@123');
+  console.log('  Student2 : student2@edumanage.com/ Teacher@123');
+  console.log('  Parent   : parent@edumanage.com  / Parent@123');
+  console.log('\nData Created:');
+  console.log('  - 6 users across all roles');
+  console.log('  - 2 classes, 5 subjects');
+  console.log('  - 2 teacher profiles, 2 student profiles');
+  console.log('  - 1 parent profile (linked to student)');
+  console.log('  - ~15 attendance records');
+  console.log('  - 2 assignments with submissions');
+  console.log('  - 8 published results');
+  console.log('  - 1 fee structure, 2 invoices, 1 receipt');
+  console.log('  - Weekly timetable with 11 slots');
+  console.log('  - 5 announcements');
+  console.log('  - 4 notifications');
+  console.log('  - 4 audit log entries\n');
 }
 
 main()

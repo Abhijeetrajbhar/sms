@@ -1,4 +1,3 @@
-// ─── Student Service ─────────────────────────────────────────────────────────
 import prisma from '../../config/database';
 import crypto from 'crypto';
 import { AppError } from '../../utils/AppError';

@@ -174,7 +174,7 @@ export class ReportCardService {
 
       const { student, results, summary } = jobData;
 
-      // ── Header ───────────────────────────────────────────────
+      // Document header
       doc
         .fontSize(24)
         .fillColor('#1a365d')
@@ -190,7 +190,7 @@ export class ReportCardService {
         .text(`Academic Year: ${summary.academicYear} | Term: ${summary.term}`, { align: 'center' })
         .moveDown(1);
 
-      // ── Student Info ─────────────────────────────────────────
+      // Student metadata
       doc.rect(50, doc.y, 495, 80).fillAndStroke('#f7fafc', '#e2e8f0').fillColor('#2d3748');
 
       const infoY = doc.y + 10;
@@ -204,7 +204,7 @@ export class ReportCardService {
 
       doc.moveDown(4);
 
-      // ── Results Table ─────────────────────────────────────────
+      // Results table
       doc
         .fontSize(13)
         .fillColor('#1a365d')
@@ -245,7 +245,7 @@ export class ReportCardService {
 
       doc.moveDown(1);
 
-      // ── Summary ───────────────────────────────────────────────
+      // Academic summary
       doc
         .fontSize(13)
         .fillColor('#1a365d')
@@ -270,7 +270,7 @@ export class ReportCardService {
 
       doc.moveDown(5);
 
-      // ── Remarks ───────────────────────────────────────────────
+      // Remarks
       if (summary.teacherRemarks) {
         doc
           .fontSize(11)
@@ -293,7 +293,7 @@ export class ReportCardService {
           .moveDown(0.5);
       }
 
-      // ── Footer ────────────────────────────────────────────────
+      // Footer & signatures
       doc
         .moveDown(2)
         .fontSize(9)

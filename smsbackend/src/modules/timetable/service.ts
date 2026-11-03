@@ -1,4 +1,3 @@
-// service.ts
 import prisma from '../../config/database';
 import { AppError } from '../../utils/AppError';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';

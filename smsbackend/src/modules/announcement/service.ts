@@ -1,4 +1,3 @@
-// service.ts
 import prisma from '../../config/database';
 import { AnnouncementTarget } from '@prisma/client';
 import { AppError } from '../../utils/AppError';

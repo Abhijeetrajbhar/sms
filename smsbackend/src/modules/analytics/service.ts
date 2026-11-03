@@ -16,7 +16,7 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 export class AnalyticsService {
-  // ─── Admin Analytics ────────────────────────────────────────────────────────
+  // Admin analytics
   async getAdminDashboard(user?: NonNullable<AuthenticatedRequest['user']>) {
     const dashboard = await withCache('analytics:admin:dashboard:v2', async () => {
       const today = new Date();
@@ -154,7 +154,7 @@ export class AnalyticsService {
     };
   }
 
-  // ─── Teacher Analytics ───────────────────────────────────────────────────────
+  // Teacher analytics
   async getTeacherDashboard(teacherUserId: string) {
     return withCache(`analytics:teacher:${teacherUserId}`, async () => {
       const teacher = await prisma.teacherProfile.findUnique({ where: { userId: teacherUserId } });
@@ -199,7 +199,7 @@ export class AnalyticsService {
     });
   }
 
-  // ─── Student Analytics ───────────────────────────────────────────────────────
+  // Student analytics
   async getStudentDashboard(studentUserId: string) {
     return withCache(`analytics:student:${studentUserId}`, async () => {
       const student = await prisma.studentProfile.findUnique({
@@ -271,7 +271,7 @@ export class AnalyticsService {
     });
   }
 
-  // ─── Parent Analytics ────────────────────────────────────────────────────────
+  // Parent analytics
   async getParentDashboard(parentUserId: string) {
     return withCache(`analytics:parent:${parentUserId}`, async () => {
       const parent = await prisma.parentProfile.findUnique({ where: { userId: parentUserId } });

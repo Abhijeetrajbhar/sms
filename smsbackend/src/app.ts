@@ -52,7 +52,7 @@ export function createApp(): Application {
 
   app.use(requestContext);
 
-  // ── Security ─────────────────────────────────────────────────────────────────
+  // Security middleware
   app.use(
     helmet({
       contentSecurityPolicy: config.NODE_ENV === 'production',
@@ -102,13 +102,13 @@ export function createApp(): Application {
     paymentWebhookRoutes
   );
 
-  // ── Core Middleware ───────────────────────────────────────────────────────────
+  // Core parser middleware
   app.use(compression());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
 
-  // ── Logging ───────────────────────────────────────────────────────────────────
+  // Request logging
   if (config.NODE_ENV !== 'test') {
     morgan.token('request-id', (req) => (req as RequestWithContext).requestId || '-');
     app.use(
@@ -119,10 +119,10 @@ export function createApp(): Application {
     );
   }
 
-  // ── Global Rate Limit ─────────────────────────────────────────────────────────
+  // Global rate limiting
   app.use(defaultRateLimit);
 
-  // ── Health Check ──────────────────────────────────────────────────────────────
+  // Health check endpoints
   app.get('/health', (_req, res) => {
     res.json({
       success: true,
@@ -151,7 +151,7 @@ export function createApp(): Application {
     }
   });
 
-  // ── API Routes ────────────────────────────────────────────────────────────────
+  // API routes
   const API = '/api/v1';
 
   app.use(`${API}/auth`, authRoutes);
@@ -180,12 +180,12 @@ export function createApp(): Application {
   app.use(`${API}/documents`, documentRoutes);
   app.use(`${API}/leaves`, leaveRoutes);
 
-  // ── Razorpay Standard Checkout Routes ─────────────────────────────────────────
+  // Payment checkout routes
   app.use('/api', standardCheckoutRoutes);
   app.use(API, standardCheckoutRoutes);
   app.use(`${API}/payments/standard`, standardCheckoutRoutes);
 
-  // ── Error Handlers ────────────────────────────────────────────────────────────
+  // Error handling
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);
 

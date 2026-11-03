@@ -49,7 +49,7 @@ async function bootstrap(): Promise<void> {
       `);
     });
 
-    // ── Graceful Shutdown ───────────────────────────────────────────────────────
+    // Graceful shutdown handling
     const shutdown = async (signal: string) => {
       logger.info(`\n${signal} received. Shutting down gracefully...`);
 
