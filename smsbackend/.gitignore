@@ -1,4 +1,19 @@
-# Secrets
+# ==============================================================================
+# EduManage Backend .gitignore
+# ==============================================================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production builds
+dist/
+**/dist/
+build/
+**/build/
+*.tsbuildinfo
+
+# Secrets & Environment
 .env
 .env.*
 !.env.example
@@ -6,26 +21,42 @@
 **/.env.*
 !**/.env.example
 .env.test.example
-
-# Dependencies
-node_modules/
-**/node_modules/
-
-# Builds
-dist/
-**/dist/
-build/
-**/build/
+*.pem
+*.key
+*.cert
+*.crt
 
 # Logs
-*.log
 logs/
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+combined.log
+error.log
+exceptions.log
+rejections.log
 
-# Editor and OS
+# Testing & Coverage
+coverage/
+.nyc_output/
+.temp/
+tmp/
+**/tmp/
+.cache/
+.eslintcache
+
+# Editor & OS files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+Desktop.ini
+*.swp
+*.swo
 
-# Prisma generated files
+# Prisma & Database
 **/node_modules/.prisma/
+*.sqlite
+*.db
+dump.rdb

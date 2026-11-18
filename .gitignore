@@ -1,49 +1,140 @@
-# Dependencies
+# ==============================================================================
+# EduManage / CampusOryx — Master Root .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Dependencies & Package Managers
+# ------------------------------------------------------------------------------
 node_modules/
 **/node_modules/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
 
-# Production build artifacts
+# ------------------------------------------------------------------------------
+# 2. Production Build Outputs
+# ------------------------------------------------------------------------------
 dist/
 **/dist/
 build/
 **/build/
+out/
+**/out/
+*.tsbuildinfo
 
-# Local Environment & Secrets (Never commit .env files)
+# ------------------------------------------------------------------------------
+# 3. Environment Variables & Secrets (NEVER commit credentials)
+# ------------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
 **/.env
 **/.env.*
 !**/.env.example
+*.pem
+*.key
+*.cert
+*.crt
 
-# Logs
-*.log
+# ------------------------------------------------------------------------------
+# 4. Logs & Diagnostics
+# ------------------------------------------------------------------------------
 logs/
+**/logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+combined.log
+error.log
+exceptions.log
+rejections.log
 
-# OS & Editor files
+# ------------------------------------------------------------------------------
+# 5. OS & Filesystem Metadata
+# ------------------------------------------------------------------------------
+# macOS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
 Thumbs.db
+ehthumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux / Generic
+*~
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# ------------------------------------------------------------------------------
+# 6. IDEs & Code Editors
+# ------------------------------------------------------------------------------
 .vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
+*.iml
+*.ipr
+*.iws
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
 
-# Testing & Coverage
+# ------------------------------------------------------------------------------
+# 7. Testing, Coverage & Cache
+# ------------------------------------------------------------------------------
 coverage/
+**/coverage/
 .nyc_output/
-
-# Temporary storage & caches
 .cache/
+**/.cache/
 .temp/
 tmp/
-.tempmediaStorage/
-.system_generated/
+**/tmp/
+.eslintcache
+.stylelintcache
+.prettiercache
+.parcel-cache
+.vite/
+.vitest/
+.vitest-cache/
+test-results/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
 
-# Prisma
+# ------------------------------------------------------------------------------
+# 8. Temporary Files & Local Workspace Scratchpads
+# ------------------------------------------------------------------------------
+.system_generated/
+.tempmediaStorage/
+scratch/
+
+# ------------------------------------------------------------------------------
+# 9. Database, Cache & ORM Engine Artifacts
+# ------------------------------------------------------------------------------
 **/node_modules/.prisma/
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+dump.rdb
