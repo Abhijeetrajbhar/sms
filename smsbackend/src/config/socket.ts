@@ -8,9 +8,14 @@ import prisma from './database';
 let io: SocketServer;
 
 export function initializeSocket(httpServer: HttpServer): SocketServer {
+  const configuredOrigins = config.CLIENT_URL.split(',').map((s) => s.trim()).filter(Boolean);
+  const socketAllowedOrigins = config.NODE_ENV === 'production'
+    ? configuredOrigins
+    : [...configuredOrigins, 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'];
+
   io = new SocketServer(httpServer, {
     cors: {
-      origin: config.CLIENT_URL,
+      origin: socketAllowedOrigins,
       methods: ['GET', 'POST'],
       credentials: true,
     },

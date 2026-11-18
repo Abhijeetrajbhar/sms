@@ -57,6 +57,18 @@ npm audit --omit=dev
 
 Then test login and one representative workflow for each role against a non-production database. Do not seed demo credentials into a production database.
 
+### Initializing a Fresh Production Database
+
+To reset and bootstrap an initial Super Administrator for your institution:
+```powershell
+cd smsbackend
+# 1. Reset all collections to a fresh empty state
+npm run db:clean
+
+# 2. Bootstrap your primary institution administrator
+npm run admin:init -- --email="admin@yourdomain.com" --password="YourSecurePassword123!" --firstName="Principal" --lastName="Admin"
+```
+
 ---
 
 ## Pushing to GitHub

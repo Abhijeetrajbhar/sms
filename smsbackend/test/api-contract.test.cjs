@@ -18,25 +18,65 @@ const assert = require('node:assert/strict');
 const { createApp } = require('../dist/app.js');
 
 let server;
-let baseUrl;
+const pipePath = process.platform === 'win32'
+  ? `\\\\.\\pipe\\edumanage-test-${Date.now()}`
+  : `/tmp/edumanage-test-${Date.now()}.sock`;
+
+function request(path, options = {}) {
+  return new Promise((resolve, reject) => {
+    const headers = options.headers || {};
+    const method = options.method || 'GET';
+    const body = options.body;
+
+    const req = http.request(
+      {
+        socketPath: pipePath,
+        path,
+        method,
+        headers,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          resolve({
+            status: res.statusCode,
+            headers: {
+              get(name) {
+                return res.headers[name.toLowerCase()] || null;
+              },
+            },
+            json: async () => JSON.parse(raw),
+            text: async () => raw,
+          });
+        });
+      }
+    );
+
+    req.on('error', reject);
+    if (body) {
+      req.write(body);
+    }
+    req.end();
+  });
+}
 
 test.before(async () => {
   server = http.createServer(createApp());
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(pipePath, resolve);
   });
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${address.port}`;
 });
 
 test.after(async () => {
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 });
 
 test('exposes live and compatibility health contracts with a correlation ID', async () => {
   const requestId = 'contract-health-001';
-  const response = await fetch(`${baseUrl}/health`, { headers: { 'X-Request-Id': requestId } });
+  const response = await request('/health', { headers: { 'X-Request-Id': requestId } });
   const body = await response.json();
 
   assert.equal(response.status, 200);
@@ -44,13 +84,13 @@ test('exposes live and compatibility health contracts with a correlation ID', as
   assert.equal(body.success, true);
   assert.equal(body.message, 'EduManage API is running');
 
-  const liveness = await fetch(`${baseUrl}/health/live`);
+  const liveness = await request('/health/live');
   assert.equal(liveness.status, 200);
   assert.deepEqual((await liveness.json()).status, 'live');
 });
 
 test('returns a traceable 401 before protected routes reach the database', async () => {
-  const response = await fetch(`${baseUrl}/api/v1/students/me/profile`, {
+  const response = await request('/api/v1/students/me/profile', {
     headers: { Authorization: 'Bearer malformed-token', 'X-Request-Id': 'contract-auth-001' },
   });
   const body = await response.json();
@@ -62,7 +102,7 @@ test('returns a traceable 401 before protected routes reach the database', async
 });
 
 test('returns a traceable not-found contract for unknown routes', async () => {
-  const response = await fetch(`${baseUrl}/api/v1/not-a-real-route`, {
+  const response = await request('/api/v1/not-a-real-route', {
     headers: { 'X-Request-Id': 'contract-not-found-001' },
   });
   const body = await response.json();
@@ -74,7 +114,7 @@ test('returns a traceable not-found contract for unknown routes', async () => {
 });
 
 test('rejects invalid public admission applications before persistence', async () => {
-  const response = await fetch(`${baseUrl}/api/v1/admissions`, {
+  const response = await request('/api/v1/admissions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'contract-admission-001' },
     body: JSON.stringify({ email: 'not-an-email' }),
@@ -87,7 +127,7 @@ test('rejects invalid public admission applications before persistence', async (
 });
 
 test('rejects calendar events with an invalid date range before persistence', async () => {
-  const response = await fetch(`${baseUrl}/api/v1/calendar`, {
+  const response = await request('/api/v1/calendar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'contract-calendar-001' },
     body: JSON.stringify({ title: 'Final examination', type: 'EXAM', academicYear: '2026-2027', startDate: '2026-09-10', endDate: '2026-09-09' }),

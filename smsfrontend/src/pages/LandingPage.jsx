@@ -33,72 +33,72 @@ import BrandLogo from '../components/common/BrandLogo.jsx';
 import Button from '../components/ui/Button.jsx';
 import { cn } from '../utils/cn.js';
 
-const accounts = [
-  { role: 'ADMIN', label: 'Administrator', email: 'admin@edumanage.com', password: 'Admin@123', badge: 'Super Admin', shortcut: '1' },
-  { role: 'TEACHER', label: 'Faculty Lead', email: 'teacher@edumanage.com', password: 'Teacher@123', badge: 'Instructor', shortcut: '2' },
-  { role: 'STUDENT', label: 'Learner', email: 'student@edumanage.com', password: 'Student@123', badge: 'Enrolled', shortcut: '3' },
-  { role: 'PARENT', label: 'Guardian', email: 'parent@edumanage.com', password: 'Parent@123', badge: 'Family Access', shortcut: '4' },
+const portalRoles = [
+  { role: 'ADMIN', label: 'Administrator', badge: 'Super Admin', shortcut: '1' },
+  { role: 'TEACHER', label: 'Faculty Lead', badge: 'Instructor', shortcut: '2' },
+  { role: 'STUDENT', label: 'Learner', badge: 'Enrolled', shortcut: '3' },
+  { role: 'PARENT', label: 'Guardian', badge: 'Family Access', shortcut: '4' },
 ];
 
 const telemetryLogs = [
-  { time: '10:48:12', tag: 'AUDIT', action: 'RESULT_PUBLISHED', detail: 'Sarah M. published Term 1 Physics Gradebook (42 records)', tone: 'emerald' },
-  { time: '10:46:04', tag: 'AUTH', action: 'SESSION_INIT', detail: 'Admin authenticated from 127.0.0.1 with 2FA session token', tone: 'indigo' },
-  { time: '10:42:55', tag: 'FINANCE', action: 'GATEWAY_RECONCILED', detail: 'Razorpay auto-settled invoice #INV-2026-884 for ₹12,500', tone: 'sky' },
-  { time: '10:39:18', tag: 'ACADEMIC', action: 'ATTENDANCE_LOCKED', detail: 'Grade 10-A attendance submitted (36 Present, 2 Excused)', tone: 'amber' },
-  { time: '10:31:02', tag: 'SECURITY', action: 'RBAC_ENFORCED', detail: 'Encrypted document access granted for Student Profile #6ac8', tone: 'indigo' },
+  { time: '10:48:12', tag: 'ACADEMIC', action: 'GRADEBOOK_PUBLISHED', detail: 'Term 1 Physics Gradebook published for Class 10-A (42 records)', tone: 'emerald' },
+  { time: '10:46:04', tag: 'AUTH', action: 'ADMIN_SIGN_IN', detail: 'Administrator authenticated from secure session', tone: 'indigo' },
+  { time: '10:42:55', tag: 'FINANCE', action: 'PAYMENT_SETTLED', detail: 'Razorpay settled tuition fee invoice #INV-2026-884 for ₹12,500', tone: 'sky' },
+  { time: '10:39:18', tag: 'ATTENDANCE', action: 'ROLL_CALL_MARKED', detail: 'Grade 10-A attendance submitted (36 Present, 2 Excused)', tone: 'amber' },
+  { time: '10:31:02', tag: 'SECURITY', action: 'DOCUMENT_VERIFIED', detail: 'Verified student compliance record for Student Profile #6AC8', tone: 'indigo' },
 ];
 
 const institutionalEngines = [
   {
-    id: 'ENG-01',
-    title: 'Daily Academic Dynamics',
-    subtitle: 'Zero-friction roll-call and live cohort presence tracking',
+    id: 'FEAT-01',
+    title: 'Attendance & Roll Call',
+    subtitle: 'Fast daily attendance marking with automated guardian alerts',
     icon: CalendarCheck,
-    badge: 'Real-time Telemetry',
-    stats: '99.4% On-time Marking',
-    description: 'Faculty mark attendance in under 15 seconds. Guardian notifications dispatch instantly over authenticated channels with automated absence escalation.',
+    badge: 'Daily Operations',
+    stats: 'Instant Sync',
+    description: 'Faculty mark attendance in under 15 seconds. Automated notifications dispatch to guardians via email/SMS with absence escalation.',
     metrics: [
-      { label: 'Avg marking speed', value: '14.2s' },
-      { label: 'Parent sync delay', value: '<250ms' },
+      { label: 'Attendance Rate', value: '97.4%' },
+      { label: 'Guardian Alerts', value: 'Instant' },
     ],
   },
   {
-    id: 'ENG-02',
-    title: 'Automated Ledger & Payments',
-    subtitle: 'Dual-reconciled billing with native Razorpay & cash receipts',
+    id: 'FEAT-02',
+    title: 'Fee Billing & Invoicing',
+    subtitle: 'Digital invoicing with native Razorpay checkout and receipts',
     icon: CreditCard,
-    badge: 'Financial Integrity',
-    stats: 'Zero Manual Reconciliation',
-    description: 'Instant invoices, automated late penalties, and dual payment tracks. Webhooks automatically reconcile online checkouts while offline cash receives immutable audit numbers.',
+    badge: 'Finance & Billing',
+    stats: 'Full Reconciliation',
+    description: 'Instant invoices, automated payment reminders, and dual payment options. Online checkouts reconcile automatically with downloadable PDF receipts.',
     metrics: [
-      { label: 'Gateway uptime', value: '99.98%' },
-      { label: 'Audit resolution', value: 'Instant' },
+      { label: 'Payment Modes', value: 'Online & Cash' },
+      { label: 'Receipt Generation', value: 'Automated PDF' },
     ],
   },
   {
-    id: 'ENG-03',
-    title: 'Gradebook & Cohort Analytics',
+    id: 'FEAT-03',
+    title: 'Gradebook & Academic Reports',
     subtitle: 'GPA distributions, exam term weighting, and dynamic report cards',
     icon: Activity,
-    badge: 'Evaluation Suite',
-    stats: '100% Formula Accuracy',
-    description: 'Teachers configure custom grading bands and exam weighting. Generates professional report cards with automated percentile benchmarks and ranking.',
+    badge: 'Examinations',
+    stats: 'GPA & Percentiles',
+    description: 'Configure custom grading bands and exam weighting. Generates official school report cards with automated percentile benchmarks and ranking.',
     metrics: [
-      { label: 'Formula execution', value: 'Sub-5ms' },
-      { label: 'Export formats', value: 'PDF / CSV' },
+      { label: 'Grading Scales', value: 'Custom Bands' },
+      { label: 'Export Formats', value: 'PDF / CSV' },
     ],
   },
   {
-    id: 'ENG-04',
-    title: 'Cryptographic Security & Audit',
-    subtitle: '36+ immutable audit points tracking every read, write, and refund',
+    id: 'FEAT-04',
+    title: 'Role-Based Access & Security',
+    subtitle: 'Granular permissions and complete activity audit trail',
     icon: ShieldCheck,
-    badge: 'Compliance Grade',
-    stats: 'Zero-Trust RBAC',
-    description: 'Every sensitive operation records actor ID, client IP, browser user agent, and payload diffs. Complete regulatory accountability for accredited schools.',
+    badge: 'Security & RBAC',
+    stats: 'Access Controlled',
+    description: 'Every sensitive operation records actor ID, client IP, timestamp, and payload changes for full administrative accountability.',
     metrics: [
-      { label: 'Audited hooks', value: '36+ Events' },
-      { label: 'Tamper resistance', value: 'SHA-256' },
+      { label: 'User Roles', value: 'Admin, Staff, Family' },
+      { label: 'Audit Trail', value: 'Full Session Logs' },
     ],
   },
 ];
@@ -142,10 +142,10 @@ export default function LandingPage() {
   const { login, register, authError, isAuthLoading, isAuthenticated, theme, toggleTheme } = useApp();
   const [mode, setMode] = useState('login');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(accounts[0].role);
+  const [selectedRole, setSelectedRole] = useState(portalRoles[0].role);
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('telemetry');
-  const [loginForm, setLoginForm] = useState({ email: accounts[0].email, password: accounts[0].password });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
     firstName: '',
     lastName: '',
@@ -174,18 +174,16 @@ export default function LandingPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAuthOpen]);
 
-  const selectAccount = (account) => {
+  const selectRole = (role) => {
     setMode('login');
-    setSelectedRole(account.role);
-    setLoginForm({ email: account.email, password: account.password });
+    setSelectedRole(role);
   };
 
   const openAuth = (nextMode, rolePreset = null) => {
     setMode(nextMode);
     setRequestMessage('');
     if (rolePreset) {
-      const match = accounts.find((a) => a.role === rolePreset);
-      if (match) selectAccount(match);
+      setSelectedRole(rolePreset);
     }
     setIsAuthOpen(true);
   };
@@ -223,7 +221,7 @@ export default function LandingPage() {
               <BrandLogo className="h-9 w-9 rounded-xl border border-indigo-500/20 bg-indigo-500/10 dark:border-white/10 dark:bg-indigo-500/15" imageClassName="h-6 w-6" />
               <div>
                 <span className="font-display text-base font-extrabold tracking-tight text-slate-900 dark:text-white">CampusOryx</span>
-                <span className="ml-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">OS v2.4</span>
+                <span className="ml-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">School Portal</span>
               </div>
             </button>
             <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-50 px-2.5 py-0.5 font-mono text-[11px] font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 lg:flex">
@@ -231,15 +229,15 @@ export default function LandingPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-500" />
               </span>
-              Cluster Live • 12ms
+              All Systems Operational
             </div>
           </div>
 
           <nav className="hidden items-center gap-7 text-xs font-semibold tracking-wide text-slate-600 dark:text-slate-400 md:flex">
-            <a href="#architecture" className="transition hover:text-slate-900 dark:hover:text-white">Architecture</a>
-            <a href="#workflows" className="transition hover:text-slate-900 dark:hover:text-white">Engines</a>
-            <a href="#roles" className="transition hover:text-slate-900 dark:hover:text-white">Role Matrix</a>
-            <a href="#telemetry" className="transition hover:text-slate-900 dark:hover:text-white">Audit Security</a>
+            <a href="#overview" className="transition hover:text-slate-900 dark:hover:text-white">Overview</a>
+            <a href="#features" className="transition hover:text-slate-900 dark:hover:text-white">Features</a>
+            <a href="#roles" className="transition hover:text-slate-900 dark:hover:text-white">Portals</a>
+            <a href="#security" className="transition hover:text-slate-900 dark:hover:text-white">Security</a>
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -265,7 +263,7 @@ export default function LandingPage() {
               onClick={() => openAuth('login', 'ADMIN')}
               className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-indigo-700 active:scale-95 dark:bg-gradient-to-r dark:from-indigo-500 dark:via-indigo-600 dark:to-indigo-700 dark:shadow-[0_0_20px_rgba(99,102,241,0.35)] dark:hover:shadow-[0_0_28px_rgba(99,102,241,0.55)]"
             >
-              <span>Launch Demo</span>
+              <span>Explore Demo</span>
               <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
             </button>
           </div>
@@ -279,22 +277,22 @@ export default function LandingPage() {
             {/* Version Pill */}
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3.5 py-1 text-xs font-semibold text-indigo-700 shadow-sm transition dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
               <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Next-Gen Institutional OS</span>
+              <span>Integrated School Management</span>
               <span className="h-1 w-1 rounded-full bg-indigo-500 dark:bg-indigo-400" />
-              <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-200">Zero Generic Boilerplate</span>
+              <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-200">v2.4 Production</span>
             </div>
 
             {/* Main Headline */}
             <h1 className="max-w-4xl text-4xl font-extrabold tracking-tight text-slate-900 sm:text-6xl sm:leading-[1.1] md:text-7xl dark:text-white">
-              Precision software engineered for{' '}
+              Modern management software for{' '}
               <span className="bg-gradient-to-r from-indigo-600 via-sky-600 to-emerald-600 bg-clip-text text-transparent dark:from-indigo-300 dark:via-sky-200 dark:to-emerald-300">
-                high-velocity campuses.
+                schools and educators.
               </span>
             </h1>
 
             {/* Subtitle */}
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg sm:leading-relaxed dark:text-slate-400">
-              Replace disconnected spreadsheets, fragile portals, and manual fee reconciliations with an engineered academic operations command system.
+              Streamline student attendance, gradebooks, fee payments, and family communication in one reliable, unified platform.
             </p>
 
             {/* CTAs & Quick Launch */}
@@ -303,7 +301,7 @@ export default function LandingPage() {
                 onClick={() => openAuth('login')}
                 className="group inline-flex items-center gap-2.5 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-slate-800 active:scale-98 dark:bg-white dark:text-slate-950 dark:shadow-[0_12px_28px_rgba(255,255,255,0.12)] dark:hover:bg-slate-100"
               >
-                <span>Open Command Portal</span>
+                <span>Sign In to Portal</span>
                 <span className="raycast-kbd border-slate-700 bg-slate-800 text-slate-200 dark:border-slate-300 dark:bg-slate-200/60 dark:text-slate-800">↵</span>
               </button>
 
@@ -315,25 +313,10 @@ export default function LandingPage() {
                 Request Parent Access
               </button>
             </div>
-
-            {/* Micro Quick Roles Selector */}
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400">
-              <span className="mr-1 font-mono text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Fast Credentials:</span>
-              {accounts.map((acc) => (
-                <button
-                  key={acc.role}
-                  onClick={() => openAuth('login', acc.role)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-slate-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-900 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10 dark:hover:text-white"
-                >
-                  <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400">[{acc.shortcut}]</span>
-                  <span>{acc.label}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Interactive Hero Command Center / Live Telemetry Preview */}
-          <div id="architecture" className="relative mx-auto mt-16 max-w-5xl">
+          <div id="overview" className="relative mx-auto mt-16 max-w-5xl">
             <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl dark:border-white/[0.12] dark:bg-[#0c0f17]/90 dark:shadow-[0_24px_64px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)]">
               {/* Terminal Window Header Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/[0.08] dark:bg-white/[0.02] sm:px-6">
@@ -341,14 +324,14 @@ export default function LandingPage() {
                   <div className="h-3 w-3 rounded-full bg-rose-500" />
                   <div className="h-3 w-3 rounded-full bg-amber-500" />
                   <div className="h-3 w-3 rounded-full bg-emerald-500" />
-                  <span className="ml-3 font-mono text-xs text-slate-600 dark:text-slate-400">campusoryx-core.node // session: encrypted-tls1.3</span>
+                  <span className="ml-3 font-mono text-xs text-slate-600 dark:text-slate-400">campusoryx.school/portal • active session</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1 dark:border-white/[0.08] dark:bg-black/40">
                   {[
-                    { id: 'telemetry', label: 'Live Audit Feed', icon: Terminal },
-                    { id: 'finance', label: 'Fee Engine', icon: CreditCard },
-                    { id: 'cohort', label: 'Cohort Matrix', icon: Layers },
+                    { id: 'telemetry', label: 'Recent Activity', icon: Terminal },
+                    { id: 'finance', label: 'Fee Overview', icon: CreditCard },
+                    { id: 'cohort', label: 'Class Summary', icon: Layers },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -372,10 +355,10 @@ export default function LandingPage() {
                 {activeTab === 'telemetry' && (
                   <div className="space-y-2.5 font-mono text-xs">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-2 text-[11px] text-slate-500 dark:border-white/[0.05] dark:text-slate-500">
-                      <span>TIMESTAMP (UTC)</span>
-                      <span>SYSTEM SUBMODULE</span>
-                      <span>CRYPTOGRAPHIC ACTION</span>
-                      <span className="hidden sm:inline">VERIFICATION STATUS</span>
+                      <span>TIMESTAMP</span>
+                      <span>MODULE</span>
+                      <span>ACTION</span>
+                      <span className="hidden sm:inline">STATUS</span>
                     </div>
                     {telemetryLogs.map((log, i) => (
                       <div
@@ -456,12 +439,12 @@ export default function LandingPage() {
               {/* Terminal Footer Bar */}
               <div className="flex flex-wrap items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-mono text-slate-600 sm:px-6 dark:border-white/[0.08] dark:bg-black/40 dark:text-slate-500">
                 <div className="flex items-center gap-4">
-                  <span>Engine: Node.js + Prisma ORM</span>
-                  <span>Cluster: MongoDB Atlas Primary</span>
+                  <span>Runtime: Node.js + Prisma</span>
+                  <span>Database: MongoDB</span>
                 </div>
                 <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                   <Terminal className="h-3.5 w-3.5" />
-                  <span>36 Live Cryptographic Event Hooks Connected</span>
+                  <span>Activity Logging & Role-Based Access Enabled</span>
                 </div>
               </div>
             </div>
@@ -469,15 +452,15 @@ export default function LandingPage() {
         </section>
 
         {/* Bento Grid: 4 Core Institutional Engines */}
-        <section id="workflows" className="border-t border-slate-200 bg-slate-100/60 py-24 dark:border-white/[0.08] dark:bg-black/30">
+        <section id="features" className="border-t border-slate-200 bg-slate-100/60 py-24 dark:border-white/[0.08] dark:bg-black/30">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mb-14">
-              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Engineered Architecture</span>
+              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Core Capabilities</span>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl dark:text-white">
-                Built like critical infrastructure.
+                Built for everyday school operations.
               </h2>
               <p className="mt-3 max-w-2xl text-slate-600 dark:text-slate-400">
-                Four enterprise-grade submodules architected to handle every daily demand of school administration without human error.
+                Essential tools for administrators, teachers, students, and guardians to stay organized and informed.
               </p>
             </div>
 
@@ -523,12 +506,12 @@ export default function LandingPage() {
         <section id="roles" className="border-t border-slate-200 bg-white py-24 dark:border-white/[0.08] dark:bg-[#07090e]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mb-14 text-center">
-              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Granular Role Security</span>
+              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">User Portals</span>
               <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl dark:text-white">
-                Four distinct operational personas.
+                Tailored for every campus stakeholder.
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-slate-600 dark:text-slate-400">
-                Tailored cockpits designed specifically for administrators, faculty, students, and parents.
+                Dedicated, role-aware workspaces for administrators, educators, students, and parents.
               </p>
             </div>
 
@@ -555,10 +538,10 @@ export default function LandingPage() {
                   </div>
 
                   <button
-                    onClick={() => openAuth('login', accounts[idx].role)}
+                    onClick={() => openAuth('login', portalRoles[idx]?.role || 'ADMIN')}
                     className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-slate-800 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-900 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-300 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10 dark:hover:text-white"
                   >
-                    <span>Launch {accounts[idx].label}</span>
+                    <span>Sign in to {portalRoles[idx]?.label || item.role}</span>
                     <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
@@ -568,36 +551,36 @@ export default function LandingPage() {
         </section>
 
         {/* Security & Audit Proof Section */}
-        <section id="telemetry" className="border-t border-slate-200 bg-slate-100/60 py-24 dark:border-white/[0.08] dark:bg-black/40">
+        <section id="security" className="border-t border-slate-200 bg-slate-100/60 py-24 dark:border-white/[0.08] dark:bg-black/40">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-12 lg:grid-cols-12">
               <div className="lg:col-span-7">
-                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Verified System Integrity</span>
+                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Audit Trail & Security</span>
                 <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl dark:text-white">
-                  Every click, refund, and attendance point is cryptographically verifiable.
+                  Complete transparency with automated activity logging and role security.
                 </h2>
                 <p className="mt-4 text-slate-600 dark:text-slate-400">
-                  Unlike traditional school software that mutates rows without provenance, CampusOryx implements enterprise audit pipelines.
+                  Every sensitive action—from grade updates and fee waivers to account changes—is safely logged with timestamps and user attribution.
                 </p>
                 <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.02]">
                     <p className="font-mono text-2xl font-bold text-slate-900 dark:text-white">36+</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Event Triggers</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Audited Events</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.02]">
                     <p className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400">Zero</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Untracked Edits</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Untracked Changes</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.02]">
                     <p className="font-mono text-2xl font-bold text-indigo-600 dark:text-indigo-400">100%</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">IP & UserAgent Proof</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Session Attribution</p>
                   </div>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-[#0c0f17] font-mono text-xs lg:col-span-5">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-3 text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
-                  <span>AUDIT INTEGRITY SAMPLE</span>
+                  <span>SAMPLE AUDIT LOG ENTRY</span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">STATUS: PASS</span>
                 </div>
                 <div className="mt-4 space-y-2 text-slate-800 dark:text-slate-300">
@@ -606,7 +589,7 @@ export default function LandingPage() {
                   <p><span className="text-slate-500">Entity:</span> Class 10-A (ID: 6ac8723510c...)</p>
                   <p><span className="text-slate-500">Network IP:</span> ::1 (Verified Gateway)</p>
                   <p><span className="text-slate-500">Agent:</span> Mozilla/5.0 (Windows NT 10.0)</p>
-                  <p className="border-t border-slate-200 pt-2 font-bold text-emerald-600 dark:border-white/[0.06] dark:text-emerald-400">// Tamper resistance verified against database</p>
+                  <p className="border-t border-slate-200 pt-2 font-bold text-emerald-600 dark:border-white/[0.06] dark:text-emerald-400">// Verified audit entry saved in database</p>
                 </div>
               </div>
             </div>
@@ -650,12 +633,12 @@ export default function LandingPage() {
                     <Command className="h-4 w-4" />
                   </div>
                   <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">
-                    {mode === 'login' ? 'Institutional Access' : 'Register Parent Account'}
+                    {mode === 'login' ? 'Sign In to EduManage' : 'Register Parent Account'}
                   </h3>
                 </div>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                   {mode === 'login'
-                    ? 'Authenticate to your specialized campus workspace'
+                    ? 'Sign in to access your school dashboard'
                     : 'Submit verification request for guardian student link'}
                 </p>
               </div>
@@ -690,29 +673,27 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* Quick Role Fill Pills (Login Mode) */}
+            {/* Target Portal Selector */}
             {mode === 'login' && (
               <div className="mt-4">
                 <div className="mb-2 flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                  <span>PRESET CREDENTIALS (CLICK TO TEST)</span>
-                  <span className="text-slate-500">KEYS [1-4]</span>
+                  <span>SELECT TARGET PORTAL</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {accounts.map((acc) => (
+                  {portalRoles.map((roleItem) => (
                     <button
-                      key={acc.role}
+                      key={roleItem.role}
                       type="button"
-                      onClick={() => selectAccount(acc)}
+                      onClick={() => selectRole(roleItem.role)}
                       className={cn(
                         'flex flex-col items-start rounded-xl border p-2 text-left transition',
-                        selectedRole === acc.role
+                        selectedRole === roleItem.role
                           ? 'border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm dark:border-indigo-500/60 dark:bg-indigo-500/15 dark:text-white dark:shadow-[0_0_12px_rgba(99,102,241,0.2)]'
                           : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-200'
                       )}
                     >
-                      <span className="font-mono text-[10px] font-bold text-indigo-600 dark:text-indigo-400">[{acc.shortcut}]</span>
-                      <span className="text-xs font-bold leading-tight">{acc.label}</span>
-                      <span className="mt-0.5 truncate text-[10px] text-slate-500">{acc.badge}</span>
+                      <span className="text-xs font-bold leading-tight">{roleItem.label}</span>
+                      <span className="mt-0.5 truncate text-[10px] text-slate-500">{roleItem.badge}</span>
                     </button>
                   ))}
                 </div>
@@ -723,7 +704,7 @@ export default function LandingPage() {
             {mode === 'login' ? (
               <form className="mt-5 space-y-3.5" onSubmit={handleLogin}>
                 <div>
-                  <label className="mb-1 block font-mono text-[11px] font-bold uppercase text-slate-600 dark:text-slate-400">INSTITUTIONAL EMAIL</label>
+                  <label className="mb-1 block font-mono text-[11px] font-bold uppercase text-slate-600 dark:text-slate-400">EMAIL ADDRESS</label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                     <input
@@ -731,7 +712,7 @@ export default function LandingPage() {
                       required
                       value={loginForm.email}
                       onChange={(e) => setLoginForm((prev) => ({ ...prev, email: e.target.value }))}
-                      placeholder="user@edumanage.com"
+                      placeholder="name@school.edu"
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-xs font-medium text-slate-900 placeholder-slate-400 transition focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-white/[0.08] dark:bg-black/40 dark:text-white dark:placeholder-slate-600"
                     />
                   </div>

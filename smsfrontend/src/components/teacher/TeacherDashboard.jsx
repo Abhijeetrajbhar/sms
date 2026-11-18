@@ -54,7 +54,7 @@ export default function TeacherDashboard({ dashboard, currentUser, isLoading, er
         <Card className="flex items-center justify-center py-16">
           <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
             <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
-            Loading faculty cockpit...
+            Loading faculty dashboard...
           </div>
         </Card>
       </div>
@@ -66,9 +66,9 @@ export default function TeacherDashboard({ dashboard, currentUser, isLoading, er
   return (
     <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Educator Cockpit"
+        eyebrow="Faculty Portal"
         title={`Welcome back, ${teacherName}`}
-        description="Assigned classes, daily lecture timetable, roll-call records, and assignment evaluation queues."
+        description="Manage assigned classes, daily schedules, attendance records, and student evaluations."
       />
 
       {error ? (
@@ -78,7 +78,7 @@ export default function TeacherDashboard({ dashboard, currentUser, isLoading, er
         </div>
       ) : null}
 
-      {/* KPI Telemetry Row */}
+      {/* Overview Metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Assigned Classes"
@@ -87,7 +87,7 @@ export default function TeacherDashboard({ dashboard, currentUser, isLoading, er
           tone="violet"
         />
         <StatCard
-          title="Enrolled Learners"
+          title="Total Students"
           value={dashboard?.studentCount || 0}
           icon={GraduationCap}
           tone="blue"

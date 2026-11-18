@@ -1,28 +1,37 @@
-# CampusOryx / EduManage School Management System
+# EduManage — School Management System
 
-A modern AI-assisted School Management System (SMS) with a Node.js + TypeScript backend and a React + Vite frontend.
+A production-ready school ERP platform built with Node.js, Express, TypeScript, MongoDB (Prisma), and React.
 
 ## Overview
 
-This repository contains a complete school ERP platform with:
-- user authentication, roles, and permissions
-- student, teacher, parent, class, and subject management
-- attendance tracking
-- assignments and submissions
-- exam results, grades, and PDF report cards
-- fee management, invoicing, payments, and refunds
-- timetable scheduling
-- announcements and notifications
-- analytics and risk scoring
-- audit logs and security monitoring
-- AI-powered academic insights and question generation
+This repository contains a full-featured school management platform supporting Administrators, Teachers, Students, and Parents:
+- User authentication, roles, and granular permissions
+- Student directory, admissions, and guardian linkages
+- Teacher profiles, subject mapping, and class mentorship
+- Daily attendance tracking and heatmap summaries
+- Assignments, online submissions, and grading feedback
+- Examination results, grading scales, GPA calculation, and PDF report cards
+- Fee structures, bulk invoicing, online Razorpay checkout, and offline receipt workflows
+- Timetable scheduling for classes and teachers
+- School announcements and live notifications via Socket.io
+- Audit trails and activity logging for administrative accountability
+
+## Documentation
+
+Comprehensive project documentation is maintained in the [`docs/`](docs/) directory:
+- [Features & Modules Inventory](docs/PROJECT_FEATURES.md)
+- [API Contract & Integration Guide](docs/API_CONTRACT.md)
+- [Deployment & Production Checklist](docs/DEPLOYMENT_CHECKLIST.md)
 
 ## Repository Structure
 
 ```
 / (workspace root)
   README.md
-  DEPLOYMENT_CHECKLIST.md
+  docs/
+    API_CONTRACT.md
+    DEPLOYMENT_CHECKLIST.md
+    PROJECT_FEATURES.md
   smsbackend/
     docker-compose.yml
     Dockerfile
@@ -224,7 +233,7 @@ This repository is ready for deployment on modern Platform-as-a-Service (PaaS) p
 - **Split Hosting**:
   - **Backend**: Host on [Render](https://render.com), [Railway](https://railway.app), [Fly.io](https://fly.io), or Heroku. Uses `npm run build` (`prisma generate && tsc`), `npm start`, and includes a health check at `/health`.
   - **Frontend**: Host on [Vercel](https://vercel.com), [Netlify](https://netlify.com), or Cloudflare Pages. Client-side routing is configured via [`vercel.json`](smsfrontend/vercel.json) and [`smsfrontend/public/_redirects`](smsfrontend/public/_redirects).
-- **Checklist**: See [`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md) for pre-flight verification steps, security recommendations, and production environment variable setup.
+- **Checklist**: See [`docs/DEPLOYMENT_CHECKLIST.md`](docs/DEPLOYMENT_CHECKLIST.md) for pre-flight verification steps, security recommendations, and production environment variable setup.
 
 ## Notes
 

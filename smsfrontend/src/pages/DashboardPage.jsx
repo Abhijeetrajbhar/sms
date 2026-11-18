@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { AlertTriangle, BarChart3, BrainCircuit, ClipboardCheck, GraduationCap, IndianRupee, Users } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader.jsx';
 import StatCard from '../components/common/StatCard.jsx';
@@ -41,6 +41,7 @@ function statusBreakdown(rows = []) {
 
 export default function DashboardPage() {
   const { data, currentRole, currentUser, isDataLoading, dataError, retryData, selectedChildId, setSelectedChildId } = useApp();
+
   if (currentRole === 'ADMIN') {
     return (
       <Suspense fallback={<DashboardLoader />}>
@@ -48,6 +49,7 @@ export default function DashboardPage() {
       </Suspense>
     );
   }
+
   if (currentRole === 'TEACHER') {
     return (
       <Suspense fallback={<DashboardLoader />}>
@@ -55,6 +57,7 @@ export default function DashboardPage() {
       </Suspense>
     );
   }
+
   if (currentRole === 'PARENT') {
     return (
       <Suspense fallback={<DashboardLoader />}>
@@ -69,6 +72,7 @@ export default function DashboardPage() {
       </Suspense>
     );
   }
+
   if (currentRole === 'STUDENT') {
     return (
       <Suspense fallback={<DashboardLoader />}>
@@ -81,30 +85,57 @@ export default function DashboardPage() {
       </Suspense>
     );
   }
+
+  return (
+    <DefaultFallbackDashboard
+      data={data}
+      currentRole={currentRole}
+      currentUser={currentUser}
+      isDataLoading={isDataLoading}
+    />
+  );
+}
+
+function DefaultFallbackDashboard({ data, currentRole, currentUser, isDataLoading }) {
   const analytics = data.dashboardAnalytics || {};
-  const scopedStudent = getScopedStudent(data, currentUser, currentRole);
-  const scopedResults = getStudentResults(data, scopedStudent);
-  const scopedFees = getStudentFees(data, scopedStudent);
-  const scopedAssignments = data.assignments.filter((item) => !scopedStudent?.className || item.className === scopedStudent.className);
+  const scopedStudent = useMemo(() => getScopedStudent(data, currentUser, currentRole), [data, currentUser, currentRole]);
+  const scopedResults = useMemo(() => getStudentResults(data, scopedStudent), [data, scopedStudent]);
+  const scopedFees = useMemo(() => getStudentFees(data, scopedStudent), [data, scopedStudent]);
+  const scopedAssignments = useMemo(
+    () => data.assignments.filter((item) => !scopedStudent?.className || item.className === scopedStudent.className),
+    [data.assignments, scopedStudent]
+  );
   const isPersonalRole = ['STUDENT', 'PARENT'].includes(currentRole);
   const visibleFees = isPersonalRole ? scopedFees : data.fees;
-  const collected = visibleFees.reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
-  const totalFee = visibleFees.reduce((sum, fee) => sum + Number(fee.amount || 0), 0);
 
-  const attendanceRows = data.attendance?.today || [];
-  const localAttendance = statusBreakdown(attendanceRows);
-  const localAttendanceRate = average(data.students.map((student) => student.attendance));
-  const attendanceRate = analytics.attendance?.percentage ?? analytics.attendanceOverview?.percentage ?? localAttendanceRate;
-  const feeCollectionRate = analytics.fees?.collectionRate ?? percentage(collected, totalFee);
+  const { collected, totalFee, feeCollectionRate } = useMemo(() => {
+    const col = visibleFees.reduce((sum, fee) => sum + Number(fee.paid || 0), 0);
+    const tot = visibleFees.reduce((sum, fee) => sum + Number(fee.amount || 0), 0);
+    const rate = analytics.fees?.collectionRate ?? percentage(col, tot);
+    return { collected: col, totalFee: tot, feeCollectionRate: rate };
+  }, [visibleFees, analytics.fees?.collectionRate]);
+
+  const { attendanceRate, localAttendance } = useMemo(() => {
+    const attendanceRows = data.attendance?.today || [];
+    const local = statusBreakdown(attendanceRows);
+    const localRate = average(data.students.map((student) => student.attendance));
+    const rate = analytics.attendance?.percentage ?? analytics.attendanceOverview?.percentage ?? localRate;
+    return { attendanceRate: rate, localAttendance: local };
+  }, [data.attendance?.today, data.students, analytics.attendance, analytics.attendanceOverview]);
+
   const totalStudents = analytics.totals?.students ?? data.students.length;
   const totalTeachers = analytics.totals?.teachers ?? data.teachers.length;
   const totalClasses = analytics.totals?.classes ?? data.classes.length;
-  const atRiskStudents = data.students.filter((item) => item.risk && item.risk !== 'low').length;
+  const atRiskStudents = useMemo(() => data.students.filter((item) => item.risk && item.risk !== 'low').length, [data.students]);
   const attendanceBreakdown = analytics.attendance || analytics.attendanceOverview || localAttendance;
-  const attendanceTotal = Object.entries(attendanceBreakdown)
-    .filter(([key]) => !['percentage', 'total'].includes(key))
-    .reduce((sum, [, value]) => sum + Number(value || 0), 0);
-  const riskStudents = data.students.filter((item) => item.risk && item.risk !== 'low').slice(0, 4);
+  const attendanceTotal = useMemo(
+    () =>
+      Object.entries(attendanceBreakdown)
+        .filter(([key]) => !['percentage', 'total'].includes(key))
+        .reduce((sum, [, value]) => sum + Number(value || 0), 0),
+    [attendanceBreakdown]
+  );
+  const riskStudents = useMemo(() => data.students.filter((item) => item.risk && item.risk !== 'low').slice(0, 4), [data.students]);
 
   const roleCopy = {
     ADMIN: {

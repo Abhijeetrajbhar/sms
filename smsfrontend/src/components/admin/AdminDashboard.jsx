@@ -63,7 +63,7 @@ export default function AdminDashboard({ dashboard, currentUser, isLoading, erro
         <Card className="flex items-center justify-center py-16">
           <div className="flex items-center gap-3 font-mono text-xs text-slate-500 dark:text-slate-400">
             <RefreshCw className="h-4 w-4 animate-spin text-indigo-500 dark:text-indigo-400" />
-            Loading administrative telemetry...
+            Loading dashboard data...
           </div>
         </Card>
       </div>
@@ -78,9 +78,9 @@ export default function AdminDashboard({ dashboard, currentUser, isLoading, erro
   return (
     <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Leadership Command Node"
-        title="Institutional Operations & Telemetry"
-        description="Live campus telemetry, financial reconciliation, regulatory pending actions, and cryptographic audit trace."
+        eyebrow="Administration"
+        title="School Operations & Overview"
+        description="Monitor daily attendance, student enrollment, fee collections, and system activity."
       />
 
       {error ? (
@@ -89,11 +89,11 @@ export default function AdminDashboard({ dashboard, currentUser, isLoading, erro
             <Shield className="h-4 w-4 shrink-0 text-rose-500" />
             <span>{error}</span>
           </div>
-          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry Sync</Button>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry</Button>
         </div>
       ) : null}
 
-      {/* KPI Telemetry Row */}
+      {/* KPI Overview Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Active Students"

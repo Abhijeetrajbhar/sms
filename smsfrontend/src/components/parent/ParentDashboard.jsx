@@ -52,7 +52,7 @@ export default function ParentDashboard({
         <Card className="flex items-center justify-center py-16">
           <div className="flex items-center gap-3 font-mono text-xs text-slate-600 dark:text-slate-400">
             <RefreshCw className="h-4 w-4 animate-spin text-brand-600 dark:text-brand-400" />
-            Loading guardian telemetry...
+            Loading parent dashboard...
           </div>
         </Card>
       </div>
@@ -93,15 +93,15 @@ export default function ParentDashboard({
   return (
     <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Guardian Cockpit"
+        eyebrow="Parent Portal"
         title="Family Academic & Finance Overview"
-        description="Monitor daily roll-call presence, pay term fees with Razorpay, and review verified receipts."
+        description="Monitor your child's attendance, pay school fees securely, and review academic progress."
       />
 
       {error ? (
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 font-mono text-xs text-rose-700 dark:text-rose-300 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
-          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry Sync</Button>
+          <Button size="sm" variant="secondary" icon={RefreshCw} onClick={onRetry}>Retry</Button>
         </div>
       ) : null}
 

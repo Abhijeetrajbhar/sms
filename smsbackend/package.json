@@ -12,6 +12,8 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "admin:promote": "ts-node src/scripts/promoteSuperAdmin.ts",
+    "admin:init": "ts-node src/scripts/bootstrapAdmin.ts",
+    "db:clean": "ts-node src/scripts/cleanDatabase.ts",
     "seed": "ts-node src/seed.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "npm run build && node --test test/*.test.cjs",

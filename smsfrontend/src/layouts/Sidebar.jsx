@@ -34,7 +34,7 @@ export default function Sidebar({ open, onClose }) {
             <BrandLogo className="h-9 w-9 rounded-xl border border-indigo-500/20 bg-indigo-500/10 dark:border-white/10 dark:bg-indigo-500/15" imageClassName="h-6 w-6" />
             <div>
               <p className="font-display text-base font-extrabold tracking-tight text-slate-900 dark:text-white">CampusOryx</p>
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">School OS</p>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">School Portal</p>
             </div>
           </Link>
           <button
@@ -70,7 +70,7 @@ export default function Sidebar({ open, onClose }) {
         {/* Navigation Stream */}
         <nav className="relative flex-1 overscroll-contain overflow-y-auto px-3 pb-4 sm:px-4 space-y-1">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1">
-            Workspaces
+            Menu
           </p>
           {nav.map((item) => (
             <NavLink

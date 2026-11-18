@@ -41,7 +41,7 @@ export default function StudentDashboard({ dashboard, isLoading, error, onRetry 
         <Card className="flex items-center justify-center py-16">
           <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
             <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
-            Loading student terminal...
+            Loading student portal...
           </div>
         </Card>
       </div>
@@ -68,8 +68,8 @@ export default function StudentDashboard({ dashboard, isLoading, error, onRetry 
 
   const quickActions = [
     { label: 'Attendance', path: '/app/attendance', icon: ClipboardCheck },
-    { label: 'Coursework', path: '/app/assignments', icon: BellRing },
-    { label: 'Gradebook', path: '/app/results', icon: Award },
+    { label: 'Assignments', path: '/app/assignments', icon: BellRing },
+    { label: 'My Grades', path: '/app/results', icon: Award },
     { label: 'Class Schedule', path: '/app/timetable', icon: CalendarDays },
     { label: 'Announcements', path: '/app/announcements', icon: Megaphone },
     { label: 'Fee Invoices', path: '/app/fees', icon: CreditCard },
@@ -78,9 +78,9 @@ export default function StudentDashboard({ dashboard, isLoading, error, onRetry 
   return (
     <div className="page-shell space-y-6">
       <PageHeader
-        eyebrow="Learner Terminal"
+        eyebrow="Student Portal"
         title={`Welcome, ${studentFullName(profile?.user)}`}
-        description="Daily lecture timetable, published exam results, homework deadlines, and campus broadcasts."
+        description="View your daily schedule, exam results, pending assignments, and school announcements."
       />
 
       {error ? (

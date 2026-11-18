@@ -71,9 +71,9 @@ export default {
         },
       },
       boxShadow: {
-        glow: '0 18px 55px rgb(var(--color-primary) / 0.18)',
-        soft: '0 8px 32px rgb(var(--color-primary) / 0.10)',
-        glass: 'inset 0 1px 0 rgb(255 255 255 / 0.12), 0 8px 32px rgb(var(--color-primary) / 0.10)',
+        glow: '0 10px 30px rgb(var(--color-primary) / 0.12)',
+        soft: '0 4px 20px rgb(var(--color-primary) / 0.08)',
+        glass: 'inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 24px rgb(var(--color-primary) / 0.08)',
       },
       backgroundImage: {
         'mesh-dark': 'linear-gradient(135deg, rgb(var(--color-background)) 0%, rgb(var(--color-surface-container-lowest)) 46%, rgb(var(--color-surface-container-low)) 100%)',

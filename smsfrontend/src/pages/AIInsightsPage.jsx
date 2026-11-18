@@ -12,18 +12,26 @@ function buildRecordInsights(students) {
   return students
     .filter((student) => student.risk !== 'low' || student.attendance < 85 || student.fees === 'overdue')
     .map((student) => {
-      const risk = student.risk || (student.attendance < 70 ? 'high' : 'medium');
-      const score = risk === 'high' ? 86 : risk === 'medium' ? 68 : 42;
+      const attendance = Number(student.attendance || 100);
+      const isFeeOverdue = student.fees === 'overdue';
+      const risk = student.risk || (attendance < 70 ? 'high' : attendance < 85 ? 'medium' : 'low');
+
+      // Continuous weighted risk index based on attendance deficit, fee status, and academic risk
+      const attendancePenalty = Math.max(0, Math.round((85 - attendance) * 1.5));
+      const feePenalty = isFeeOverdue ? 20 : student.fees === 'partial' ? 8 : 0;
+      const baseScore = risk === 'high' ? 55 : risk === 'medium' ? 35 : 15;
+      const score = Math.min(95, Math.max(25, baseScore + attendancePenalty + feePenalty));
+
       return {
         student: student.name,
         risk,
         confidence: score,
         source: 'Record analysis',
-        summary: `${student.name} currently has ${student.attendance}% attendance, grade ${student.grade}, fee status ${student.fees}, and risk level ${risk}.`,
+        summary: `${student.name} currently has ${attendance}% attendance, grade ${student.grade || 'N/A'}, fee status ${student.fees}, and risk level ${risk}.`,
         recommendations: [
-          ...(student.attendance < 85 ? ['Attendance follow-up'] : []),
+          ...(attendance < 85 ? ['Attendance follow-up'] : []),
           ...(risk === 'high' ? ['Mentor intervention'] : []),
-          ...(student.fees === 'overdue' ? ['Fee support review'] : []),
+          ...(isFeeOverdue ? ['Fee support review'] : []),
           'Review progress weekly',
         ],
       };

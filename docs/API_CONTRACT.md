@@ -2,7 +2,7 @@
 
 ## Contract rules
 
-The machine-readable [OpenAPI 3.1 specification](smsbackend/openapi.json) covers operational, authentication, student, result, and payment APIs, including shared request/response envelopes and authorization requirements. The source route files remain the authority for the full endpoint inventory until the specification is expanded to every domain.
+The machine-readable [OpenAPI 3.1 specification](../smsbackend/openapi.json) covers operational, authentication, student, result, and payment APIs, including shared request/response envelopes and authorization requirements. The source route files remain the authority for the full endpoint inventory until the specification is expanded to every domain.
 
 Admissions are available under `/api/v1/admissions`: the public `POST /` accepts a validated application; administrators with `admissions:view` or `admissions:manage` can list, review, and enroll accepted applicants.
 
